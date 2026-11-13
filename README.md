@@ -15,6 +15,12 @@ no background, no border — just text. Built in Rust with [Rune](https://github
 
 Position and scale persist in `%APPDATA%\clockscreen\settings.json`.
 
+## Download
+
+[Releases](https://github.com/akrram0/clockscreen/releases/latest) carry a prebuilt
+`clockscreen.exe` (Windows x64, no installer, no runtime). It is unsigned, so SmartScreen warns
+on first run: *More info → Run anyway*.
+
 ## Run
 
 ```powershell
