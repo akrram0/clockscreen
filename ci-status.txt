@@ -1,5 +1,5 @@
-run: 43508106023 attempt 1
-sha: 442628bdd0b801d8e0bcb7df2d72cf3fe28407e4
+run: 43509689729 attempt 1
+sha: 57c7ef6203f50ee1f5e08bbfb4573f510eaecc90
 job: failure
 fetch-rune: success
 toolchain: success
@@ -7,4 +7,5 @@ build: success
 tests: failure
 stage: skipped
 smoke: skipped
-build.log: 3737 bytes
+build.log: 3375 bytes
+test.log: 2022 bytes

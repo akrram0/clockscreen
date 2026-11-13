@@ -23,6 +23,9 @@ warning: unreachable expression
     = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
 
    Compiling parley v0.12.0
+warning: `parley_engine` (lib) generated 1 warning
+   Compiling ttf-parser v0.25.1
+   Compiling accesskit_windows v0.35.2 (D:\a\clockscreen\clockscreen\.rune\vendor\accesskit_windows)
 warning: unnecessary qualification
     --> .rune\vendor\wgpu-hal\src\dx12\mod.rs:1855:21
      |
@@ -40,14 +43,11 @@ help: remove the unnecessary path segments
 1855 +         let dirty = mem::take(&mut sc.dirty);
      |
 
-warning: `parley_engine` (lib) generated 1 warning
-   Compiling ttf-parser v0.25.1
-   Compiling accesskit_windows v0.35.2 (D:\a\clockscreen\clockscreen\.rune\vendor\accesskit_windows)
+   Compiling fontdue v0.9.5
    Compiling wgpu-core-deps-windows-linux-android v30.0.2
    Compiling wgpu-core v30.0.2
-   Compiling fontdue v0.9.5
-warning: `wgpu-hal` (lib) generated 1 warning (run `cargo fix --lib -p wgpu-hal` to apply 1 suggestion)
    Compiling wgpu v30.0.2
+warning: `wgpu-hal` (lib) generated 1 warning (run `cargo fix --lib -p wgpu-hal` to apply 1 suggestion)
    Compiling rune-staging v0.0.1 (https://github.com/anomalyco/rune?rev=53baebed87f3a64d081c3cebedb0482aed191558#53baebed)
    Compiling rune v0.0.1 (https://github.com/anomalyco/rune?rev=53baebed87f3a64d081c3cebedb0482aed191558#53baebed)
    Compiling clockscreen v0.2.0 (D:\a\clockscreen\clockscreen)
@@ -68,25 +68,14 @@ warning: methods `alpha_at`, `brightest_in_row`, and `ink_pixels` are never used
     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 warning: method `label` is never used
-  --> src\settings.rs:83:12
-   |
-79 | impl Face {
-   | --------- method in this implementation
-...
-83 |     pub fn label(self) -> &'static str {
-   |            ^^^^^
-
-warning: associated items `ALL` and `label` are never used
-   --> src\settings.rs:124:15
+   --> src\settings.rs:138:12
     |
-123 | impl Tint {
-    | --------- associated items in this implementation
-124 |     pub const ALL: [Tint; 4] = [Tint::Auto, Tint::Light, Tint::Warm, Tint::Cool];
-    |               ^^^
-125 |
-126 |     pub fn label(self) -> &'static str {
+135 | impl Tint {
+    | --------- method in this implementation
+...
+138 |     pub fn label(self) -> &'static str {
     |            ^^^^^
 
-warning: `clockscreen` (bin "clockscreen") generated 3 warnings
-    Finished `release` profile [optimized] target(s) in 5m 17s
+warning: `clockscreen` (bin "clockscreen") generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 4m 30s
 clockscreen: cargo build exited 0
