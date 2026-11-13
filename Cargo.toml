@@ -30,3 +30,12 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = true
+
+# Rune is built against four crates patched inside its own repo (`vendor/`): without these,
+# `rune` does not compile against the published crates.io versions. `scripts/fetch-rune.ps1`
+# (and the CI workflow) put a checkout of the same rev in `.rune/` before building.
+[patch.crates-io]
+wgpu-hal = { path = ".rune/vendor/wgpu-hal" }
+winit = { path = ".rune/vendor/winit" }
+parley_engine = { path = ".rune/vendor/parley_engine" }
+accesskit_windows = { path = ".rune/vendor/accesskit_windows" }

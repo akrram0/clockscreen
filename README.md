@@ -18,6 +18,7 @@ Position and scale persist in `%APPDATA%\clockscreen\settings.json`.
 ## Run
 
 ```powershell
+.\scripts\fetch-rune.ps1   # once: Rune's patched crates must exist under .rune/
 cargo run --release
 ```
 
@@ -26,6 +27,7 @@ The first build compiles Rune and wgpu from git, so it takes a while.
 ## Build
 
 ```powershell
+.\scripts\fetch-rune.ps1
 cargo build --release
 New-Item -ItemType Directory -Force dist | Out-Null
 Copy-Item target\release\clockscreen.exe dist\clockscreen.exe
