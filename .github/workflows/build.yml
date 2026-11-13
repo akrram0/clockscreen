@@ -1,0 +1,52 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: clockscreen
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Unit tests
+        run: cargo test --release --bin clockscreen
+
+      - name: Stage artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target\release\clockscreen.exe dist\clockscreen.exe
+          Get-Item dist\clockscreen.exe | Select-Object FullName, Length
+
+      - name: Smoke run (no window)
+        shell: pwsh
+        run: |
+          $out = & .\dist\clockscreen.exe --version
+          Write-Output "stdout: $out"
+          if ($LASTEXITCODE -ne 0) { throw "clockscreen.exe --version exited $LASTEXITCODE" }
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: clockscreen-windows-x64
+          path: dist/clockscreen.exe
+          if-no-files-found: error

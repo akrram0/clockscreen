@@ -1,0 +1,32 @@
+[package]
+name = "clockscreen"
+version = "0.1.0"
+edition = "2021"
+description = "A Windows desktop clock drawn straight onto the wallpaper"
+license = "MIT"
+
+[[bin]]
+name = "clockscreen"
+path = "src/main.rs"
+
+[dependencies]
+# Pinned to a dev rev, as Rune asks of its apps.
+rune = { git = "https://github.com/anomalyco/rune", rev = "53baebed87f3a64d081c3cebedb0482aed191558" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+raw-window-handle = "0.6"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_System_LibraryLoader",
+  "Win32_System_SystemInformation",
+] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
