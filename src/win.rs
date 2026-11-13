@@ -5,7 +5,7 @@
 //! and moves the window with `SetWindowPos`, so clicks still reach the desktop.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SYSTEMTIME, WPARAM};
@@ -30,6 +30,7 @@ pub struct Input {
     scale: AtomicU32,
     reset: AtomicBool,
     reload: AtomicBool,
+    panel: AtomicBool,
 }
 
 impl Input {
@@ -38,6 +39,7 @@ impl Input {
             scale: AtomicU32::new(scale.to_bits()),
             reset: AtomicBool::new(false),
             reload: AtomicBool::new(false),
+            panel: AtomicBool::new(false),
         }
     }
     pub fn scale(&self) -> f32 {
@@ -52,12 +54,19 @@ impl Input {
     pub fn take_reset(&self) -> bool {
         self.reset.swap(false, Ordering::Relaxed)
     }
-    /// Ask the view to re-read `settings.json` (face, tint, opacity, clock format).
+    /// Ask the clock to re-read `settings.json` (face, tint, opacity, clock format).
     pub fn request_reload(&self) {
         self.reload.store(true, Ordering::Relaxed);
     }
     pub fn take_reload(&self) -> bool {
         self.reload.swap(false, Ordering::Relaxed)
+    }
+    /// Ask the settings panel to re-read `settings.json` (the tray changed the face).
+    pub fn request_panel(&self) {
+        self.panel.store(true, Ordering::Relaxed);
+    }
+    pub fn take_panel(&self) -> bool {
+        self.panel.swap(false, Ordering::Relaxed)
     }
 }
 
@@ -65,7 +74,6 @@ struct Hook {
     /// `HWND` is a bare pointer and so is neither `Send` nor `Sync`; the address is.
     hwnd: isize,
     input: Arc<Input>,
-    settings: Arc<Mutex<settings::Settings>>,
 }
 
 static HOOK: OnceLock<Hook> = OnceLock::new();
@@ -146,11 +154,12 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
                     PRESSED.store(false, Ordering::Relaxed);
                     if was_dragging {
                         if let Some(rect) = rect_of(hwnd) {
-                            if let Ok(mut saved) = hook.settings.lock() {
-                                saved.x = Some(rect.left);
-                                saved.y = Some(rect.top);
-                                settings::save(*saved);
-                            }
+                            // Re-read the file and change only the position: the settings window
+                            // may have written a new face or opacity since this process started.
+                            let mut saved = settings::load();
+                            saved.x = Some(rect.left);
+                            saved.y = Some(rect.top);
+                            settings::save(saved);
                         }
                     }
                 }
@@ -166,10 +175,9 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
                                     let next =
                                         (hook.input.scale() + step).clamp(SCALE_MIN, SCALE_MAX);
                                     hook.input.set_scale(next);
-                                    if let Ok(mut saved) = hook.settings.lock() {
-                                        saved.scale = next;
-                                        settings::save(*saved);
-                                    }
+                                    let mut saved = settings::load();
+                                    saved.scale = next;
+                                    settings::save(saved);
                                 }
                             }
                         }
@@ -184,8 +192,8 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
 
 /// Watches the mouse from a thread of its own: a low-level hook needs a message loop, and
 /// `run_windows` already owns the main one.
-pub fn watch_mouse(hwnd: HWND, input: Arc<Input>, settings: Arc<Mutex<settings::Settings>>) {
-    let _ = HOOK.set(Hook { hwnd: hwnd.0 as isize, input, settings });
+pub fn watch_mouse(hwnd: HWND, input: Arc<Input>) {
+    let _ = HOOK.set(Hook { hwnd: hwnd.0 as isize, input });
     std::thread::spawn(|| unsafe {
         let hook = match SetWindowsHookExW(WH_MOUSE_LL, Some(hook_proc), None, 0) {
             Ok(hook) => hook,

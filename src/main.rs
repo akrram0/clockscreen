@@ -9,6 +9,7 @@
 
 mod faces;
 mod glyphs;
+mod panel;
 mod settings;
 mod win;
 
@@ -29,6 +30,31 @@ static INPUT: OnceLock<Arc<win::Input>> = OnceLock::new();
 static WINDOW: Mutex<Option<WindowHandle>> = Mutex::new(None);
 static DPI: OnceLock<f32> = OnceLock::new();
 static SYSTEM_DARK: AtomicBool = AtomicBool::new(true);
+
+/// The clock re-reads `settings.json` on its next poll.
+pub(crate) fn request_clock_reload() {
+    if let Some(input) = INPUT.get() {
+        input.request_reload();
+    }
+}
+
+/// The clock moves itself back to the centre of the primary display.
+pub(crate) fn request_clock_reset() {
+    if let Some(input) = INPUT.get() {
+        input.request_reset();
+    }
+}
+
+/// The settings panel re-reads `settings.json` on its next poll.
+pub(crate) fn request_panel_reload() {
+    if let Some(input) = INPUT.get() {
+        input.request_panel();
+    }
+}
+
+pub(crate) fn take_panel_reload() -> bool {
+    INPUT.get().map(|input| input.take_panel()).unwrap_or(false)
+}
 
 const WEEKDAYS: [&str; 7] =
     ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -372,6 +398,8 @@ fn tray_icon() -> rune::TrayIcon {
 
 fn install_tray() {
     let menu = vec![
+        rune::TrayItem::action("settings", "Settings…"),
+        rune::TrayItem::Separator,
         rune::TrayItem::action("face", "Next face"),
         rune::TrayItem::action("startup", "Start with Windows"),
         rune::TrayItem::Separator,
@@ -384,25 +412,22 @@ fn install_tray() {
     match rune::Tray::new(spec, |event| {
         if let rune::TrayEvent::Menu(id) = event {
             match id.as_str() {
+                "settings" => panel::open(),
                 "face" => {
                     let mut saved = settings::load();
                     saved.face = saved.face.next();
                     settings::save(saved);
-                    if let Some(input) = INPUT.get() {
-                        input.request_reload();
-                    }
+                    request_clock_reload();
+                    request_panel_reload();
                 }
                 "startup" => {
                     let on = !win::start_with_windows();
                     if !win::set_start_with_windows(on) {
                         eprintln!("clockscreen: could not write the Run key");
                     }
+                    request_panel_reload();
                 }
-                "reset" => {
-                    if let Some(input) = INPUT.get() {
-                        input.request_reset();
-                    }
-                }
+                "reset" => request_clock_reset(),
                 "quit" => std::process::exit(0),
                 _ => {}
             }
@@ -422,7 +447,6 @@ fn main() {
 
     let saved = settings::load();
     let input = Arc::new(win::Input::new(saved.scale));
-    let shared = Arc::new(Mutex::new(saved));
     let _ = INPUT.set(input.clone());
 
     install_tray();
@@ -449,16 +473,24 @@ fn main() {
             },
         };
 
-        vec![WindowSpec::new("clockscreen", spec(points))
-            .options(window_options(physical, position))
-            .on_created(move |window| {
-                if let Some(hwnd) = win::hwnd_of(&window) {
-                    win::pin_to_desktop(hwnd);
-                    win::watch_mouse(hwnd, input.clone(), shared.clone());
-                }
-                if let Ok(mut held) = WINDOW.lock() {
-                    *held = Some(window.clone());
-                }
-            })]
+        vec![
+            WindowSpec::new("clockscreen", spec(points))
+                .options(window_options(physical, position))
+                .on_created(move |window| {
+                    if let Some(hwnd) = win::hwnd_of(&window) {
+                        win::pin_to_desktop(hwnd);
+                        win::watch_mouse(hwnd, input.clone());
+                    }
+                    if let Ok(mut held) = WINDOW.lock() {
+                        *held = Some(window);
+                    }
+                })
+                .boxed(),
+            // Created hidden, opened from the tray. Closing it closes only the panel.
+            WindowSpec::new("settings", panel::spec())
+                .options(panel::options())
+                .on_created(panel::remember)
+                .boxed(),
+        ]
     });
 }
