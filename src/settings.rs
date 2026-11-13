@@ -96,6 +96,18 @@ impl Face {
         let index = Self::ALL.iter().position(|face| *face == self).unwrap_or(0);
         Self::ALL[(index + 1) % Self::ALL.len()]
     }
+
+    /// One line for the settings card. Short enough to fit under the name at 11 pt.
+    pub fn hint(self) -> &'static str {
+        match self {
+            Face::Glass => "Frosted, rim-lit",
+            Face::Hairline => "Thin outlines",
+            Face::Bold => "Heavy and tight",
+            Face::Stacked => "Hours over minutes",
+            Face::Condensed => "Narrow block",
+            Face::Mono => "Monospaced",
+        }
+    }
 }
 
 /// How the fill is tinted. `Auto` follows the wallpaper luminance under the clock.
@@ -242,7 +254,7 @@ mod tests {
 
     #[test]
     fn a_half_position_is_dropped() {
-        let s = Settings { x: Some(10), y: None, scale: 1.0 }.sanitized();
+        let s = Settings { x: Some(10), y: None, scale: 1.0, ..Default::default() }.sanitized();
         assert_eq!(s.x, None);
         assert_eq!(s.y, None);
     }

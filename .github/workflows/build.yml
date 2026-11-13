@@ -45,7 +45,12 @@ jobs:
 
       - name: Unit tests
         id: tests
-        run: cargo test --release --bin clockscreen
+        shell: pwsh
+        run: |
+          cargo test --release --bin clockscreen 2>&1 | Tee-Object -FilePath test.log
+          $code = $LASTEXITCODE
+          "clockscreen: cargo test exited $code" | Out-File -Append -Encoding utf8 test.log
+          if ($code -ne 0) { exit 1 }
 
       - name: Stage artifact
         id: stage
@@ -88,12 +93,18 @@ jobs:
           } else {
             $status += "build.log: MISSING"
           }
+          if (Test-Path test.log) {
+            $status += "test.log: $((Get-Item test.log).Length) bytes"
+          } else {
+            $status += "test.log: MISSING"
+          }
           $status | Set-Content -Encoding utf8 ci-status.txt
           $status | ForEach-Object { Write-Output $_ }
 
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           if (Test-Path build.log) { git add -f build.log }
+          if (Test-Path test.log) { git add -f test.log }
           git add -f ci-status.txt
           git commit -m "ci: diagnostics for ${{ github.sha }} [skip ci]"
           git push origin HEAD:refs/heads/main
