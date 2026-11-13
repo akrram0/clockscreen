@@ -20,10 +20,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Fetch Rune sources (patched crates)
+        id: rune
         shell: pwsh
         run: ./scripts/fetch-rune.ps1
 
       - name: Install Rust
+        id: toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo
@@ -32,38 +34,68 @@ jobs:
           key: clockscreen
 
       - name: Build release
+        id: build
         shell: pwsh
         run: |
           cargo build --release 2>&1 | Tee-Object -FilePath build.log
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-
-      # Unauthenticated log access, so the failure is readable without a token.
-      - name: Publish build log on failure
-        if: failure()
-        shell: pwsh
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add -f build.log
-          git commit -m "ci: build log for ${{ github.sha }} [skip ci]"
-          git push
+          $code = $LASTEXITCODE
+          "clockscreen: cargo build exited $code" | Out-File -Append -Encoding utf8 build.log
+          if ($code -ne 0) { exit 1 }
 
       - name: Unit tests
+        id: tests
         run: cargo test --release --bin clockscreen
 
       - name: Stage artifact
+        id: stage
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item target\release\clockscreen.exe dist\clockscreen.exe
           Get-Item dist\clockscreen.exe | Select-Object FullName, Length
 
+      # The release binary is a GUI-subsystem exe, so PowerShell does not wait for `&` and never
+      # sets $LASTEXITCODE for it: wait explicitly and read ExitCode.
       - name: Smoke run (no window)
+        id: smoke
         shell: pwsh
         run: |
-          $out = & .\dist\clockscreen.exe --version
-          Write-Output "stdout: $out"
-          if ($LASTEXITCODE -ne 0) { throw "clockscreen.exe --version exited $LASTEXITCODE" }
+          $process = Start-Process -FilePath .\dist\clockscreen.exe -ArgumentList '--version' -PassThru -Wait
+          Write-Output "clockscreen.exe --version exited $($process.ExitCode)"
+          if ($process.ExitCode -ne 0) { throw "clockscreen.exe --version exited $($process.ExitCode)" }
+
+      # The workflow logs need a token, but a commit on main does not: whatever failed, leave
+      # the evidence where it can be read. Written for every failing step, including the ones
+      # that run before build.log exists.
+      - name: Publish diagnostics
+        if: failure() || cancelled()
+        shell: pwsh
+        run: |
+          $status = @(
+            "run: ${{ github.run_id }} attempt ${{ github.run_attempt }}"
+            "sha: ${{ github.sha }}"
+            "job: ${{ job.status }}"
+            "fetch-rune: ${{ steps.rune.outcome }}"
+            "toolchain: ${{ steps.toolchain.outcome }}"
+            "build: ${{ steps.build.outcome }}"
+            "tests: ${{ steps.tests.outcome }}"
+            "stage: ${{ steps.stage.outcome }}"
+            "smoke: ${{ steps.smoke.outcome }}"
+          )
+          if (Test-Path build.log) {
+            $status += "build.log: $((Get-Item build.log).Length) bytes"
+          } else {
+            $status += "build.log: MISSING"
+          }
+          $status | Set-Content -Encoding utf8 ci-status.txt
+          $status | ForEach-Object { Write-Output $_ }
+
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          if (Test-Path build.log) { git add -f build.log }
+          git add -f ci-status.txt
+          git commit -m "ci: diagnostics for ${{ github.sha }} [skip ci]"
+          git push origin HEAD:refs/heads/main
 
       - name: Upload exe
         uses: actions/upload-artifact@v4
