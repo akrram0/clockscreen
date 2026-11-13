@@ -8,8 +8,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
-use windows::Win32::System::SystemInformation::{GetLocalTime, SYSTEMTIME};
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SYSTEMTIME, WPARAM};
+use windows::Win32::System::SystemInformation::GetLocalTime;
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL};
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, GetCursorPos, GetMessageW, GetSystemMetrics,
@@ -50,7 +50,8 @@ impl Input {
 }
 
 struct Hook {
-    hwnd: HWND,
+    /// `HWND` is a bare pointer and so is neither `Send` nor `Sync`; the address is.
+    hwnd: isize,
     input: Arc<Input>,
     settings: Arc<Mutex<settings::Settings>>,
 }
@@ -88,7 +89,7 @@ fn inside(rect: &RECT, point: POINT) -> bool {
 unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if code >= 0 {
         if let Some(hook) = HOOK.get() {
-            let hwnd = hook.hwnd;
+            let hwnd = HWND(hook.hwnd as *mut core::ffi::c_void);
             match wparam.0 as u32 {
                 WM_LBUTTONDOWN => {
                     if let (Some(point), Some(rect)) = (pointer(), rect_of(hwnd)) {
@@ -116,7 +117,7 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
                                 let x = WIN_X.load(Ordering::Relaxed) as i32 + dx;
                                 let y = WIN_Y.load(Ordering::Relaxed) as i32 + dy;
                                 let _ = SetWindowPos(
-                                    Some(hwnd),
+                                    hwnd,
                                     None,
                                     x,
                                     y,
@@ -172,7 +173,7 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
 /// Watches the mouse from a thread of its own: a low-level hook needs a message loop, and
 /// `run_windows` already owns the main one.
 pub fn watch_mouse(hwnd: HWND, input: Arc<Input>, settings: Arc<Mutex<settings::Settings>>) {
-    let _ = HOOK.set(Hook { hwnd, input, settings });
+    let _ = HOOK.set(Hook { hwnd: hwnd.0 as isize, input, settings });
     std::thread::spawn(|| unsafe {
         let hook = match SetWindowsHookExW(WH_MOUSE_LL, Some(hook_proc), None, 0) {
             Ok(hook) => hook,
@@ -211,7 +212,7 @@ pub fn pin_to_desktop(hwnd: HWND) {
             & !(WS_EX_APPWINDOW.0 as isize);
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style);
         let _ = SetWindowPos(
-            Some(hwnd),
+            hwnd,
             Some(HWND_BOTTOM),
             0,
             0,
@@ -235,8 +236,7 @@ pub struct Now {
 }
 
 pub fn now() -> Now {
-    let mut time = SYSTEMTIME::default();
-    unsafe { GetLocalTime(&mut time) };
+    let time: SYSTEMTIME = unsafe { GetLocalTime() };
     Now {
         hour: time.wHour as u32,
         minute: time.wMinute as u32,
