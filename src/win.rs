@@ -29,11 +29,16 @@ const HOLD_MS: u64 = 500;
 pub struct Input {
     scale: AtomicU32,
     reset: AtomicBool,
+    reload: AtomicBool,
 }
 
 impl Input {
     pub fn new(scale: f32) -> Self {
-        Self { scale: AtomicU32::new(scale.to_bits()), reset: AtomicBool::new(false) }
+        Self {
+            scale: AtomicU32::new(scale.to_bits()),
+            reset: AtomicBool::new(false),
+            reload: AtomicBool::new(false),
+        }
     }
     pub fn scale(&self) -> f32 {
         f32::from_bits(self.scale.load(Ordering::Relaxed))
@@ -46,6 +51,13 @@ impl Input {
     }
     pub fn take_reset(&self) -> bool {
         self.reset.swap(false, Ordering::Relaxed)
+    }
+    /// Ask the view to re-read `settings.json` (face, tint, opacity, clock format).
+    pub fn request_reload(&self) {
+        self.reload.store(true, Ordering::Relaxed);
+    }
+    pub fn take_reload(&self) -> bool {
+        self.reload.swap(false, Ordering::Relaxed)
     }
 }
 
