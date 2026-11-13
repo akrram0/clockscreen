@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -25,7 +28,21 @@ jobs:
           key: clockscreen
 
       - name: Build release
-        run: cargo build --release
+        shell: pwsh
+        run: |
+          cargo build --release 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      # Unauthenticated log access, so the failure is readable without a token.
+      - name: Publish build log on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -f build.log
+          git commit -m "ci: build log for ${{ github.sha }} [skip ci]"
+          git push
 
       - name: Unit tests
         run: cargo test --release --bin clockscreen
