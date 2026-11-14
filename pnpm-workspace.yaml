@@ -1,5 +1,0 @@
-# pnpm 11 moved build-script approval here (the "pnpm" field in package.json is ignored).
-# electron needs its postinstall to download the prebuilt binary.
-allowBuilds:
-  electron: true
-  electron-winstaller: false

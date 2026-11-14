@@ -1,11 +1,10 @@
-# Dependencies
 node_modules/
-
-# Production build outputs
-dist/
-
-# Logs and temporary files
+/target
+/.rune
+/dist
 *.log
-*.tmp
+ci-status.txt
+build.log
+test.log
 .DS_Store
 Thumbs.db

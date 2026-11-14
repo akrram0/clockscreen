@@ -1,89 +1,61 @@
 # ClockScreen
 
-A frameless, transparent, highly-customizable desktop clock widget for Windows, designed with Apple/macOS aesthetics and Reddit-tier desktop setups in mind.
+A native, GPU-accelerated desktop **Wallpaper Depth Effect Clock** and **Desktop Management App** for Windows, powered by **[anomalyco/rune](https://github.com/anomalyco/rune)**.
 
-It supports **8 switchable clock styles**, adaptive low-CPU ticking (< 0.1% idle), ghost mode (click-through), window opacity control, and "Show Desktop" (Win+D) protection.
+Tucks giant stylized clock numbers behind wallpaper subjects (such as character hair, fish fins, and architectural edges) with metallic chrome gradients and rim lighting, accompanied by a dynamic media island and circular music vinyl visualizer.
 
 ---
 
-## 8 Built-in Clock Styles
+## Features
 
-1. **Minimal Digital** (420×200) — Ultra-clean tabular typography, running seconds, weekday and date.
-2. **Analog Clean** (360×360) — Minimalist circular dial with smooth 60 FPS sweep second hand.
-3. **Flip Clock** (420×210) — Classic split-flap retro digits with realistic 3D fold animations.
-4. **Typographic Stack** (320×380) — Modern Swiss / iOS-style stacked numbers (hours over minutes) with date pill.
-5. **Glass Card** (400×260) — Translucent glassmorphic card with dynamic time-of-day greeting and full date.
-6. **Cyberpunk Neon** (440×210) — Sci-Fi terminal HUD clock with glowing cyan/amber monospace digits and real-time second progress bar.
-7. **Word Clock** (520×520) — 11×10 typographic matrix highlighting the time in written words.
-8. **Dot Matrix** (420×200) — Retro 5×7 LED canvas matrix display with glowing phosphors.
+- **Wallpaper Depth Occlusion**:
+  Renders stylized display typography nestled directly *behind* foreground subjects on your wallpaper with genuine 3D depth.
+- **Pure Native GPU Rendering**:
+  Built on **`anomalyco/rune`** with `wgpu` (DirectX 12 / Vulkan), 120 FPS spring animations, and zero Chromium or Electron overhead (< 25 MB RAM, 0% idle CPU).
+- **True Desktop Shell Integration**:
+  Pins directly to the Windows `WorkerW` / `Progman` desktop layer via Win32 API (`pin_to_desktop`), sitting beneath desktop icons while maintaining transparent mouse click-through.
+- **Hold-to-Drag & Ctrl+Wheel Scaling**:
+  Even though the window is click-through, a low-level mouse hook allows you to click-and-hold to drag the clock across monitors or press `Ctrl + Scroll` to resize smoothly.
+- **Companion Widgets**:
+  - **Top Dynamic Island**: Minimal pill displaying current track title, artist, and playback activity.
+  - **Circular Music Vinyl Visualizer**: Stylized spinning vinyl disc displaying live lyrics and audio visualizer needles.
+  - **Tracked Date Line**: Clean typography with horizontal hairlines.
+- **Desktop Management App (Studio Settings)**:
+  A dedicated control center built with Rune's Apple/macOS dark-glass design language to configure clock faces (Glass, Hairline, Bold, Stacked, Condensed, Mono), tinting (Auto, Light, Warm, Cool), opacity, scale, and companion widget toggles.
 
 ---
 
 ## Requirements
 
-- Node.js 20 or newer
-- pnpm (developed against pnpm 11)
+- Windows 10 or 11 (x64)
+- Rust 1.80+ (Stable)
+- PowerShell (for checking out Rune vendor subtrees)
 
 ---
 
-## Install & Run
+## Building Locally
 
-```bash
-pnpm install
-pnpm start
+```powershell
+# 1. Fetch pinned Rune vendor crates
+./scripts/fetch-rune.ps1
+
+# 2. Build the release binary
+cargo build --release
+
+# 3. Output binary sits in target/release/clockscreen.exe
 ```
 
 ---
 
-## Build Installers
+## Configuration
 
-```bash
-pnpm dist
-```
-
-Output goes to `dist/`:
-- `ClockScreen-1.0.0-portable.exe` — Single-file portable build.
-- `ClockScreen-Setup-1.0.0.exe` — NSIS installer.
-
-The app icon is generated mathematically from code with zero dependencies:
-```bash
-pnpm icon
-```
-
----
-
-## Controls & Features
-
-- **Drag & Position:** Drag anywhere on the clock to move it. Automatically clamps to your primary or secondary display work area.
-- **Mouse Wheel Scaling:** Scroll over the clock to resize smoothly from **50% to 200%**.
-- **Context Menu:** Right-click the clock or click the System Tray icon:
-  - **Switch Style:** Switch instantly between any of the 8 styles with smooth crossfade.
-  - **Window Opacity:** Adjust transparency (100%, 90%, 75%, 60%, 40%) to match any wallpaper.
-  - **Always on Top:** Toggle between desktop-level widget or floating above active apps.
-  - **Click-Through (Ghost Mode):** When enabled, clicks pass through directly to desktop icons beneath. (Re-enable interaction via the Tray icon).
-  - **Lock Position:** Prevent accidental dragging.
-  - **12-Hour / 24-Hour:** Toggle AM/PM format.
-  - **Date Language:** Choose between System Default locale, English, or Arabic.
-  - **Reset Position:** Snaps the widget back to the bottom-right corner.
-  - **Start with Windows:** Toggle automatic launch at system login.
-
----
-
-## Performance & Architecture
-
-- **Smart Adaptive Scheduler:**
-  - Clocks that don't need sub-second motion (Digital, Flip, Typographic, Glass, Word, Dot) sleep between seconds and wake up exactly at `1000 - Date.now() % 1000`.
-  - Only the Analog sweep second hand uses 60 FPS `requestAnimationFrame`.
-  - Result: idle desktop CPU footprint is **< 0.1%**.
-- **Smooth Dragging:** Drag calculations run without triggering continuous disk writes. Position persists only when the drag concludes.
-- **Win+D Protection:** Windows "Show Desktop" does not cause the clock to disappear; the window restores itself as an omnipresent desktop element.
-
----
-
-## Settings
-
-Settings are stored as JSON and saved atomically:
+Settings are stored as JSON and reloaded in real time:
 ```
 %APPDATA%\clockscreen\settings.json
 ```
-Includes: `style`, `scale`, `opacity`, `x`, `y`, `locked`, `alwaysOnTop`, `clickThrough`, `hour12`, `locale`, `startWithWindows`. Corrupt or missing files gracefully reset to safe defaults without crashing.
+
+---
+
+## License
+
+MIT License. Bundled fonts are licensed under the SIL Open Font License (OFL).

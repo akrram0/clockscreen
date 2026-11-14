@@ -1,0 +1,44 @@
+[package]
+name = "clockscreen"
+version = "0.3.0"
+edition = "2021"
+description = "A GPU-accelerated Windows desktop wallpaper depth clock and manager powered by Rune"
+license = "MIT"
+
+[[bin]]
+name = "clockscreen"
+path = "src/main.rs"
+
+[dependencies]
+# Pinned to a dev rev, as Rune asks of its apps.
+rune = { git = "https://github.com/anomalyco/rune", rev = "53baebed87f3a64d081c3cebedb0482aed191558" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+raw-window-handle = "0.6"
+# Small, pure-Rust glyph rasteriser: the digits are drawn to an RGBA buffer so they can carry a
+# gradient and a rim light, which Rune's single-colour text cannot.
+fontdue = "0.9"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_System_LibraryLoader",
+  "Win32_System_SystemInformation",
+] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Rune is built against four crates patched inside its own repo (`vendor/`): without these,
+# `rune` does not compile against the published crates.io versions. `scripts/fetch-rune.ps1`
+# (and the CI workflow) put a checkout of the same rev in `.rune/` before building.
+[patch.crates-io]
+wgpu-hal = { path = ".rune/vendor/wgpu-hal" }
+winit = { path = ".rune/vendor/winit" }
+parley_engine = { path = ".rune/vendor/parley_engine" }
+accesskit_windows = { path = ".rune/vendor/accesskit_windows" }
