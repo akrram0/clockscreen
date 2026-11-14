@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "icon": "node scripts/make-icon.js",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win --publish never"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
