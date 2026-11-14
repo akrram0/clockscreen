@@ -18,13 +18,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use rune::{
-    col, el, row, text, AppSpec, Color, Cx, El, Family, LoopSpec, Spring, TextStyle, Tx,
-    WindowHandle, WindowOptions, WindowSpec,
+    col, el, row, text, AppSpec, Color, Cx, El, Family, TextStyle, Tx, WindowHandle,
+    WindowOptions, WindowSpec,
 };
 
-/// Breathing room around the content, in points. Over-wide is harmless: the window is transparent
-/// and click-through, and the layout centres inside it.
-const PAD: f32 = 44.0;
+/// Breathing room around the content, in points. Kept tight to prevent excessive empty bounds.
+const PAD: f32 = 18.0;
 
 static INPUT: OnceLock<Arc<win::Input>> = OnceLock::new();
 static WINDOW: Mutex<Option<WindowHandle>> = Mutex::new(None);
@@ -81,8 +80,6 @@ struct State {
     date: String,
     minute: u32,
     scale: f32,
-    fade: f32,
-    fade_pending: bool,
     face: settings::Face,
     tint: settings::Tint,
     hour24: bool,
@@ -144,7 +141,7 @@ fn build(s: &mut State) {
         return;
     };
 
-    let gap = 2.0 * s.scale;
+    let gap = 4.0 * s.scale;
     let (width, height) = if style.stacked {
         (
             (hh.points.0 + colon.points.0).max(mm.points.0),
@@ -161,8 +158,8 @@ fn build(s: &mut State) {
         return;
     };
     let date_gap = style.date_gap * s.scale;
-    // The date row has to fit too: a long weekday must widen the window, not get clipped.
-    let date_row = date.points.0 + 2.0 * 96.0 * s.scale + 2.0 * 16.0 * s.scale;
+    // Balanced hairlines that underline the lockup without over-widening the window bounds.
+    let date_row = date.points.0 + 2.0 * 32.0 * s.scale + 2.0 * 10.0 * s.scale;
     s.window = (width.max(date_row) + PAD * 2.0, height + date_gap + date.points.1 + PAD * 2.0);
 
     s.time = Some(Time {
@@ -173,7 +170,7 @@ fn build(s: &mut State) {
         stacked: style.stacked,
         gap,
         date_gap,
-        hairline: colour(style.ink.top, 0.20),
+        hairline: colour(style.ink.top, 0.22),
     });
 }
 
@@ -188,8 +185,6 @@ fn init() -> State {
         mm,
         minute: now.hour * 60 + now.minute,
         scale: INPUT.get().map(|input| input.scale()).unwrap_or(saved.scale),
-        fade: 1.0,
-        fade_pending: false,
         face: saved.face,
         tint: saved.tint,
         hour24,
@@ -207,23 +202,16 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
     SYSTEM_DARK.store(cx.system_dark(), Ordering::Relaxed);
 
     let k = s.scale;
-    let settle = || Spring::new(0.22, 0.45);
     let mut root = col().w_full().h_full().center();
 
     match &s.time {
         Some(time) => {
             let colon = el()
                 .size(time.colon.points.0, time.colon.points.1)
-                .pixels(&time.colon.pixels)
-                // One cycle per second between 18% and full: a soft breath, never a hard blink.
-                .looping(LoopSpec::opacity(1.0, 0.0, 0.18, 1.0));
+                .pixels(&time.colon.pixels);
 
             let digits = |run: &glyphs::Run| {
-                el()
-                    .size(run.points.0, run.points.1)
-                    .pixels(&run.pixels)
-                    .opacity(s.fade)
-                    .opacity_motion(settle())
+                el().size(run.points.0, run.points.1).pixels(&run.pixels)
             };
 
             let time_block = if time.stacked {
@@ -244,14 +232,14 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             root = root.gap(time.date_gap).child(time_block).child(
                 row()
                     .center_y()
-                    .gap(16.0 * k)
-                    .child(el().size(96.0 * k, 1.0).fill(time.hairline))
+                    .gap(10.0 * k)
+                    .child(el().size(32.0 * k, 1.0).fill(time.hairline))
                     .child(
                         el()
                             .size(time.date.points.0, time.date.points.1)
                             .pixels(&time.date.pixels),
                     )
-                    .child(el().size(96.0 * k, 1.0).fill(time.hairline)),
+                    .child(el().size(32.0 * k, 1.0).fill(time.hairline)),
             );
         }
         // If the font ever fails to parse, show the time plainly rather than nothing at all.
@@ -328,15 +316,6 @@ fn poll(s: &mut State, _: f64, tx: &mut Tx) -> bool {
         s.mm = mm;
         s.date = date_line(&now, meridiem, s.hour24);
         build(s);
-        // Drop to nothing now, and let the next frame spring the new digits back in. The wake is
-        // what makes those two commits two frames instead of a one-second hold at zero.
-        s.fade = 0.0;
-        s.fade_pending = true;
-        tx.wake_after(Duration::ZERO);
-        dirty = true;
-    } else if s.fade_pending {
-        s.fade = 1.0;
-        s.fade_pending = false;
         dirty = true;
     }
 

@@ -12,8 +12,8 @@ use crate::glyphs::{Fill, Ink, Spec};
 use crate::settings::{Face, Tint};
 
 /// The base point size of the time, before the user's scale.
-pub const TIME_PT: f32 = 220.0;
-pub const DATE_PT: f32 = 28.0;
+pub const TIME_PT: f32 = 160.0;
+pub const DATE_PT: f32 = 18.0;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Style {
@@ -64,49 +64,49 @@ pub fn style(face: Face, tint: Tint, system_dark: bool, opacity: f32) -> Style {
         fill: Fill::Gradient,
         ink,
         date_px: DATE_PT,
-        date_tracking: 7.0,
-        date_gap: 18.0,
+        date_tracking: 5.0,
+        date_gap: 12.0,
     };
     match face {
         // Frosted glass: the vertical ramp plus a rim light is the whole idea.
         Face::Glass => base,
         // Hairline: only the rim of each stroke survives, so the digits read as thin outlines.
         Face::Hairline => Style {
-            tracking: 5.0,
-            fill: Fill::Outline { radius: 3 },
+            tracking: 4.0,
+            fill: Fill::Outline { radius: 2 },
             ink: Ink { rim: 0.15, ..ink },
-            date_tracking: 10.0,
+            date_tracking: 6.0,
             ..base
         },
         // Bold: heavier presence through tighter tracking and a harder fill.
         Face::Bold => Style {
             size_pt: TIME_PT + 6.0,
-            tracking: -1.5,
+            tracking: -1.0,
             ink: Ink { rim: 0.22, opacity: (ink.opacity * 1.06).min(1.0), ..ink },
-            date_tracking: 5.0,
+            date_tracking: 4.0,
             ..base
         },
         // Stacked: hours over minutes, for tall and narrow wallpaper areas.
         Face::Stacked => Style {
             size_pt: TIME_PT * 0.86,
             stacked: true,
-            tracking: 3.0,
-            date_gap: 26.0,
+            tracking: 2.0,
+            date_gap: 16.0,
             ..base
         },
         // Condensed: Titillium is narrower, and the tracking pulls it tighter still.
         Face::Condensed => Style {
             font: 1,
-            tracking: -4.0,
+            tracking: -3.0,
             ink: Ink { rim: 0.35, ..ink },
-            date_tracking: 6.0,
+            date_tracking: 5.0,
             ..base
         },
         // Mono: JetBrains Mono, which is monospaced by construction.
         Face::Mono => Style {
             font: 2,
             size_pt: TIME_PT * 0.88,
-            tracking: -2.0,
+            tracking: -1.5,
             ink: Ink { rim: 0.30, ..ink },
             date_px: DATE_PT * 0.95,
             date_tracking: 4.0,
