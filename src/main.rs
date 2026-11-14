@@ -1,15 +1,14 @@
-//! ClockScreen: Native GPU Wallpaper Depth Clock & Manager in Rune.
+//! ClockScreen: `HH:MM` on the wallpaper, nothing else.
 //!
-//! The time is rasterised in [`glyphs`] with vertical glass/chrome ramps and specular rim lights.
-//! Rune owns the window; Win32 puts it at the bottom of the z-order, keeps it out of the taskbar,
-//! and watches the mouse so the clock can be dragged and scaled while remaining click-through.
+//! The time is rasterised in [`glyphs`] so it can carry a vertical glass ramp and a rim light, and
+//! laid out from measured runs so nothing is ever clipped. Rune owns the window; Win32 puts it at
+//! the bottom of the z-order, keeps it out of the taskbar, and watches the mouse so the clock can
+//! be dragged and scaled while it stays click-through.
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-mod depth;
 mod faces;
 mod glyphs;
-mod media;
 mod panel;
 mod settings;
 mod win;
@@ -23,7 +22,8 @@ use rune::{
     WindowHandle, WindowOptions, WindowSpec,
 };
 
-/// Breathing room around the content, in points.
+/// Breathing room around the content, in points. Over-wide is harmless: the window is transparent
+/// and click-through, and the layout centres inside it.
 const PAD: f32 = 44.0;
 
 static INPUT: OnceLock<Arc<win::Input>> = OnceLock::new();
@@ -87,10 +87,6 @@ struct State {
     tint: settings::Tint,
     hour24: bool,
     opacity: f32,
-    depth_enabled: bool,
-    show_date: bool,
-    show_vinyl: bool,
-    show_island: bool,
     system_dark: bool,
     time: Option<Time>,
     /// Window size in points, padding included. Measured, never guessed: Rune clips overflow.
@@ -165,14 +161,9 @@ fn build(s: &mut State) {
         return;
     };
     let date_gap = style.date_gap * s.scale;
-
-    let vinyl_w = if s.show_vinyl { 180.0 * s.scale + 36.0 * s.scale } else { 0.0 };
-    let island_h = if s.show_island { 48.0 * s.scale } else { 0.0 };
-    let date_row = if s.show_date { date.points.0 + 2.0 * 96.0 * s.scale + 2.0 * 16.0 * s.scale } else { 0.0 };
-
-    let total_w = (width + vinyl_w).max(date_row) + PAD * 2.0;
-    let total_h = height + date_gap + date.points.1 + island_h + PAD * 2.0;
-    s.window = (total_w, total_h);
+    // The date row has to fit too: a long weekday must widen the window, not get clipped.
+    let date_row = date.points.0 + 2.0 * 96.0 * s.scale + 2.0 * 16.0 * s.scale;
+    s.window = (width.max(date_row) + PAD * 2.0, height + date_gap + date.points.1 + PAD * 2.0);
 
     s.time = Some(Time {
         hh,
@@ -203,10 +194,6 @@ fn init() -> State {
         tint: saved.tint,
         hour24,
         opacity: saved.opacity,
-        depth_enabled: saved.depth_enabled,
-        show_date: saved.show_date,
-        show_vinyl: saved.show_vinyl,
-        show_island: saved.show_island,
         system_dark: SYSTEM_DARK.load(Ordering::Relaxed),
         time: None,
         window: (0.0, 0.0),
@@ -216,25 +203,19 @@ fn init() -> State {
 }
 
 fn view(s: &State, cx: &mut Cx<State>) -> El {
+    // The view is the only place with access to the desktop theme; `poll` reads it back.
     SYSTEM_DARK.store(cx.system_dark(), Ordering::Relaxed);
 
     let k = s.scale;
     let settle = || Spring::new(0.22, 0.45);
-    let track = media::get_current_track();
-    let accent = Color { r: 0.22, g: 0.74, b: 0.97, a: 0.90 }; // #38bdf8
-
-    let mut root = col().w_full().h_full().center().gap(16.0 * k);
-
-    // 1. Top Dynamic Island (if enabled)
-    if s.show_island {
-        root = root.child(depth::dynamic_island(k, &track.title, &track.artist, accent));
-    }
+    let mut root = col().w_full().h_full().center();
 
     match &s.time {
         Some(time) => {
             let colon = el()
                 .size(time.colon.points.0, time.colon.points.1)
                 .pixels(&time.colon.pixels)
+                // One cycle per second between 18% and full: a soft breath, never a hard blink.
                 .looping(LoopSpec::opacity(1.0, 0.0, 0.18, 1.0));
 
             let digits = |run: &glyphs::Run| {
@@ -260,31 +241,20 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
                     .child(digits(&time.mm))
             };
 
-            // 2. Middle Row: Clock digits + Vinyl disc (if enabled)
-            let mut center_row = row().center_y().gap(28.0 * k).child(time_block);
-
-            if s.show_vinyl {
-                center_row = center_row.child(depth::vinyl_disc(k, &track.lyrics, accent));
-            }
-
-            root = root.child(center_row);
-
-            // 3. Bottom Date Line (if enabled)
-            if s.show_date {
-                root = root.child(
-                    row()
-                        .center_y()
-                        .gap(16.0 * k)
-                        .child(el().size(96.0 * k, 1.0).fill(time.hairline))
-                        .child(
-                            el()
-                                .size(time.date.points.0, time.date.points.1)
-                                .pixels(&time.date.pixels),
-                        )
-                        .child(el().size(96.0 * k, 1.0).fill(time.hairline)),
-                );
-            }
+            root = root.gap(time.date_gap).child(time_block).child(
+                row()
+                    .center_y()
+                    .gap(16.0 * k)
+                    .child(el().size(96.0 * k, 1.0).fill(time.hairline))
+                    .child(
+                        el()
+                            .size(time.date.points.0, time.date.points.1)
+                            .pixels(&time.date.pixels),
+                    )
+                    .child(el().size(96.0 * k, 1.0).fill(time.hairline)),
+            );
         }
+        // If the font ever fails to parse, show the time plainly rather than nothing at all.
         None => {
             let fallback = TextStyle::new(faces::TIME_PT * k, 700.0)
                 .family(Family::Named("Oxanium"))
@@ -296,7 +266,6 @@ fn view(s: &State, cx: &mut Cx<State>) -> El {
             );
         }
     }
-
     root
 }
 
@@ -327,11 +296,6 @@ fn poll(s: &mut State, _: f64, tx: &mut Tx) -> bool {
             s.face = saved.face;
             s.tint = saved.tint;
             s.opacity = saved.opacity;
-            s.depth_enabled = saved.depth_enabled;
-            s.show_date = saved.show_date;
-            s.show_vinyl = saved.show_vinyl;
-            s.show_island = saved.show_island;
-
             if saved.hour24 != s.hour24 {
                 s.hour24 = saved.hour24;
                 let now = win::now();
@@ -364,6 +328,8 @@ fn poll(s: &mut State, _: f64, tx: &mut Tx) -> bool {
         s.mm = mm;
         s.date = date_line(&now, meridiem, s.hour24);
         build(s);
+        // Drop to nothing now, and let the next frame spring the new digits back in. The wake is
+        // what makes those two commits two frames instead of a one-second hold at zero.
         s.fade = 0.0;
         s.fade_pending = true;
         tx.wake_after(Duration::ZERO);
@@ -383,6 +349,8 @@ fn spec(size: (f32, f32)) -> AppSpec<State> {
         fonts: glyphs::FONT_BYTES,
         families: ("Oxanium", "JetBrains Mono"),
         poll: Some(poll),
+        // The clock is not resizable, and its own size is set in physical pixels; a 1 pt floor
+        // keeps the default 420x400 minimum from ever clamping the measured window.
         min_size: Some((1.0, 1.0)),
         ..AppSpec::new("clockscreen", size, init, view)
     }
@@ -396,6 +364,7 @@ fn window_options(physical: (u32, u32), position: (i32, i32)) -> WindowOptions {
         always_on_top: false,
         visible: true,
         position: Some(position),
+        // Physical pixels, so a scaled display cannot clip the layout.
         physical_size: Some(physical),
         min_size: None,
         max_size: None,
@@ -429,12 +398,12 @@ fn tray_icon() -> rune::TrayIcon {
 
 fn install_tray() {
     let menu = vec![
-        rune::TrayItem::action("settings", "Studio Settings…"),
+        rune::TrayItem::action("settings", "Settings…"),
         rune::TrayItem::Separator,
-        rune::TrayItem::action("face", "Next Face"),
+        rune::TrayItem::action("face", "Next face"),
         rune::TrayItem::action("startup", "Start with Windows"),
         rune::TrayItem::Separator,
-        rune::TrayItem::action("reset", "Reset Position"),
+        rune::TrayItem::action("reset", "Reset position"),
         rune::TrayItem::action("quit", "Quit"),
     ];
     let spec = rune::TraySpec::new("clockscreen", "ClockScreen", tray_icon())
@@ -447,7 +416,7 @@ fn install_tray() {
                 "face" => {
                     let mut saved = settings::load();
                     saved.face = saved.face.next();
-                    settings::save(&saved);
+                    settings::save(saved);
                     request_clock_reload();
                     request_panel_reload();
                 }
@@ -464,6 +433,7 @@ fn install_tray() {
             }
         }
     }) {
+        // The tray lives for the whole process; leaking it is what keeps the icon up.
         Ok(tray) => std::mem::forget(tray),
         Err(error) => eprintln!("clockscreen: no tray icon: {error}"),
     }
@@ -486,6 +456,8 @@ fn main() {
         let scale = display.map(|display| display.scale as f32).unwrap_or(1.0);
         let _ = DPI.set(if scale.is_finite() && scale > 0.05 { scale } else { 1.0 });
 
+        // Measure once before the window exists: the size has to be right at creation time,
+        // because Rune clips overflow rather than growing the window.
         let probe = init();
         let points = probe.window;
         let physical =
@@ -514,6 +486,7 @@ fn main() {
                     }
                 })
                 .boxed(),
+            // Created hidden, opened from the tray. Closing it closes only the panel.
             WindowSpec::new("settings", panel::spec())
                 .options(panel::options())
                 .on_created(panel::remember)

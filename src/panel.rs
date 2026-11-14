@@ -1,22 +1,22 @@
-//! The settings window / Desktop Management App.
+//! The settings window.
 //!
 //! A second, ordinary Rune window: the clock's own window is transparent, click-through and
-//! borderless, which is exactly wrong for controls. This one is decorated, focusable,
-//! and it is created hidden at startup so opening it later is instant.
+//! borderless, which is exactly wrong for controls. This one is decorated, focusable and
+//! resizable-less, and it is created hidden at startup so opening it later is instant.
 //!
 //! It owns no shared state. Every change is written to `settings.json` and announced through
 //! [`crate::request_clock_reload`], which is the same path the tray already uses, so the clock
 //! and the panel cannot disagree about anything that came from disk.
 
-use rune::tok::{self, motion, radius, space, type_, Theme};
-use rune::{col, el, row, text, AppSpec, Color, Cx, Drag, El, Phase, WindowHandle};
+use rune::tok::{self, Theme, motion, radius, space, type_};
+use rune::{AppSpec, Color, Cx, Drag, El, Phase, col, el, row, text, WindowHandle};
 
 use crate::settings::{self, Face, Settings, Tint, OPACITY_MAX, OPACITY_MIN, SCALE_MAX, SCALE_MIN};
 use crate::win;
 
 /// The size the panel is created at, in points.
-const PANEL_W: f32 = 500.0;
-const PANEL_H: f32 = 860.0;
+const PANEL_W: f32 = 480.0;
+const PANEL_H: f32 = 700.0;
 
 pub struct Panel {
     /// The working copy. Saved on every change, so there is no Cancel.
@@ -30,7 +30,7 @@ pub fn init() -> Panel {
 
 /// Persist, then let the clock pick it up on its next poll.
 fn commit(p: &mut Panel) {
-    settings::save(&p.draft);
+    settings::save(p.draft);
     crate::request_clock_reload();
 }
 
@@ -55,8 +55,8 @@ pub fn view(p: &Panel, cx: &mut Cx<Panel>) -> El {
         .h_full()
         .fill(t.bg)
         .child(
-            row().h(56.0).w_full().center().px(space::S6).justify_between().child(
-                text("ClockScreen Studio")
+            row().h(52.0).w_full().center().px(space::S6).justify_between().child(
+                text("ClockScreen")
                     .key("title")
                     .font(type_::TITLE)
                     .color(t.text),
@@ -73,78 +73,13 @@ pub fn view(p: &Panel, cx: &mut Cx<Panel>) -> El {
                 .child(section(
                     paint,
                     "face",
-                    "Clock Face",
+                    "Clock face",
                     face_grid(paint, p.draft.face),
                 ))
                 .child(section(
                     paint,
-                    "depth",
-                    "Depth Effect & Wallpaper",
-                    col()
-                        .child(toggle_row(
-                            paint,
-                            "depth-enabled",
-                            "Wallpaper Depth Occlusion",
-                            p.draft.depth_enabled,
-                            |panel| {
-                                panel.draft.depth_enabled = !panel.draft.depth_enabled;
-                                commit(panel);
-                            },
-                        ))
-                        .child(
-                            el()
-                                .key("depth-hint")
-                                .px(space::S3)
-                                .pb(space::S2)
-                                .child(
-                                    text("Tucks the clock behind foreground subjects (like fish/hair).")
-                                        .font(type_::LABEL)
-                                        .color(t.text_secondary),
-                                ),
-                        ),
-                ))
-                .child(section(
-                    paint,
-                    "widgets",
-                    "Companion Widgets",
-                    col()
-                        .child(toggle_row(
-                            paint,
-                            "toggle-island",
-                            "Top Dynamic Media Island",
-                            p.draft.show_island,
-                            |panel| {
-                                panel.draft.show_island = !panel.draft.show_island;
-                                commit(panel);
-                            },
-                        ))
-                        .child(separator(paint, "sep-w1"))
-                        .child(toggle_row(
-                            paint,
-                            "toggle-vinyl",
-                            "Circular Vinyl Visualizer Disc",
-                            p.draft.show_vinyl,
-                            |panel| {
-                                panel.draft.show_vinyl = !panel.draft.show_vinyl;
-                                commit(panel);
-                            },
-                        ))
-                        .child(separator(paint, "sep-w2"))
-                        .child(toggle_row(
-                            paint,
-                            "toggle-date",
-                            "Bottom Date Line",
-                            p.draft.show_date,
-                            |panel| {
-                                panel.draft.show_date = !panel.draft.show_date;
-                                commit(panel);
-                            },
-                        )),
-                ))
-                .child(section(
-                    paint,
                     "look",
-                    "Typography & Appearance",
+                    "Look",
                     col()
                         .child(setting_row(
                             paint,
@@ -210,7 +145,7 @@ pub fn view(p: &Panel, cx: &mut Cx<Panel>) -> El {
                                 .px(space::S3)
                                 .pb(space::S2)
                                 .child(
-                                    text("Hold mouse on clock to drag; Ctrl + wheel scales.")
+                                    text("Ctrl + mouse wheel over the clock does the same.")
                                         .font(type_::LABEL)
                                         .color(t.text_secondary),
                                 ),
@@ -219,7 +154,7 @@ pub fn view(p: &Panel, cx: &mut Cx<Panel>) -> El {
                 .child(section(
                     paint,
                     "windows",
-                    "System",
+                    "Windows",
                     col()
                         .child(toggle_row(
                             paint,
@@ -246,7 +181,7 @@ pub fn view(p: &Panel, cx: &mut Cx<Panel>) -> El {
                                 .focusable(true)
                                 .on_press(|_: &mut Panel| crate::request_clock_reset())
                                 .child(
-                                    text("Reset position to screen centre")
+                                    text("Reset the clock to the centre of the screen")
                                         .font(type_::BODY)
                                         .color(t.text),
                                 ),
@@ -263,194 +198,216 @@ fn section(paint: Paint, key: &str, title: &str, body: El) -> El {
             .font(type_::SECTION)
             .color(t.text_secondary)
             .ml(space::S3),
-    )
-    .child(
+    ).child(
         col()
-            .key("card")
-            .w_full()
-            .radius(radius::LG)
+            .padding(space::S1)
             .fill(t.card)
-            .border(paint.hair, t.border)
-            .p(space::S2)
+            .radius(radius::LG)
+            .border(paint.hair, t.card_border)
+            .shadow(1.0, 2.0, t.shadow)
+            .shadow(8.0, 24.0, t.shadow_soft)
             .child(body),
     )
 }
 
+fn separator(paint: Paint, key: &str) -> El {
+    el().key(key).h(paint.hair).ml(space::S3).mr(space::S3).fill(paint.t.separator).a11y_hidden()
+}
+
 fn setting_row(paint: Paint, key: &str, label: &str, control: El) -> El {
-    let t = paint.t;
     row()
         .key(key)
         .h(44.0)
         .px(space::S3)
         .center_y()
         .justify_between()
-        .child(text(label).font(type_::BODY).color(t.text))
+        .radius(radius::MD)
+        .label(label)
+        .child(text(label).font(type_::BODY).color(paint.t.text).a11y_hidden())
         .child(control)
 }
 
-fn separator(paint: Paint, key: &str) -> El {
-    el().key(key).h(paint.hair).w_full().fill(paint.t.border).my(space::S1)
+fn toggle_row(
+    paint: Paint,
+    key: &str,
+    label: &str,
+    on: bool,
+    flip: fn(&mut Panel),
+) -> El {
+    let t = paint.t;
+    let toggle = el()
+        .key("switch")
+        .role("switch")
+        .size(38.0, 22.0)
+        .radius(11.0)
+        .fill(if on { paint.accent } else { t.control_off })
+        .motion(motion::SNAPPY)
+        .child(
+            el()
+                .key("knob")
+                .size(18.0, 18.0)
+                .absolute(if on { 38.0 - 18.0 - 2.0 } else { 2.0 }, 2.0)
+                .radius(9.0)
+                .fill(t.knob)
+                .shadow(1.0, 3.0, t.knob_shadow)
+                .shadow(0.0, 0.5, t.edge),
+        )
+        .a11y_hidden();
+    setting_row(paint, key, label, toggle)
+        .role("switch")
+        .checked(on)
+        .hover(t.hover)
+        .press(t.press)
+        .focusable(true)
+        .on_press(flip)
 }
 
-fn face_grid(paint: Paint, selected: Face) -> El {
-    let mut grid = col().key("face-grid").gap(space::S2);
-    for chunk in Face::ALL.chunks(3) {
-        let mut r = row().gap(space::S2).w_full();
-        for &face in chunk {
-            r = r.child(face_cell(paint, face, face == selected));
+/// Six faces as a 3 x 2 grid of cards: a list of names would say less than the shapes do.
+fn face_grid(paint: Paint, current: Face) -> El {
+    let t = paint.t;
+    let mut grid = col().key("faces").gap(space::S2);
+    for pair in Face::ALL.chunks(2) {
+        let mut line = row().gap(space::S2);
+        for face in pair.iter().copied() {
+            let selected = face == current;
+            let i = Face::ALL.iter().position(|other| *other == face).unwrap_or(0);
+            line = line.child(
+                col()
+                    .key(face.label())
+                    .role("radio")
+                    .label(face.label())
+                    .checked(selected)
+                    .focusable(true)
+                    .size(196.0, 52.0)
+                    .padding(space::S2)
+                    .gap(2.0)
+                    .radius(radius::MD)
+                    .fill(if selected { t.control_track } else { Color::TRANSPARENT })
+                    .border(paint.hair, if selected { paint.accent } else { t.card_border })
+                    .hover(t.hover)
+                    .press(t.press)
+                    .on_press(move |panel: &mut Panel| {
+                        panel.draft.face = Face::ALL[i];
+                        commit(panel);
+                    })
+                    .child(
+                        text(face.label())
+                            .font(type_::BODY)
+                            .color(if selected { t.text } else { t.text_secondary })
+                            .a11y_hidden(),
+                    )
+                    .child(
+                        text(face.hint())
+                            .font(type_::LABEL)
+                            .color(t.text_secondary)
+                            .a11y_hidden(),
+                    )
+                    .child(if selected {
+                        el()
+                            .size(6.0, 6.0)
+                            .absolute(196.0 - 16.0, 10.0)
+                            .radius(3.0)
+                            .fill(paint.accent)
+                            .a11y_hidden()
+                    } else {
+                        el().size(0.0, 0.0).a11y_hidden()
+                    }),
+            );
         }
-        grid = grid.child(r);
+        grid = grid.child(line);
     }
     grid
 }
 
-fn face_cell(paint: Paint, face: Face, is_selected: bool) -> El {
+/// A segmented control: `width` points wide, one cell per item, a sliding indicator.
+fn segmented(
+    paint: Paint,
+    key: &'static str,
+    width: f32,
+    items: &[(&'static str, bool)],
+    pick: fn(&mut Panel, usize),
+) -> El {
     let t = paint.t;
-    let base = col()
-        .key(face.id())
-        .role("radio")
-        .a11y_selected(is_selected)
-        .grow(1.0)
-        .h(64.0)
-        .p(space::S3)
-        .radius(radius::MD)
-        .justify_between()
-        .focusable(true)
-        .on_press(move |panel: &mut Panel| {
-            panel.draft.face = face;
-            commit(panel);
-        });
+    let (h, pad) = (28.0, 2.0);
+    let count = items.len().max(1);
+    let seg = (width - 2.0 * pad) / count as f32;
+    let selected = items.iter().position(|(_, on)| *on).unwrap_or(0);
 
-    let styled = if is_selected {
-        base.fill(paint.accent)
-            .shadow(0.0, 4.0, t.press)
-            .child(
-                text(face.label())
-                    .font(type_::HEADING)
-                    .color(Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }),
-            )
-            .child(
-                text(face.hint())
-                    .font(type_::LABEL)
-                    .color(Color { r: 1.0, g: 1.0, b: 1.0, a: 0.85 }),
-            )
-    } else {
-        base.hover(t.hover)
-            .press(t.press)
-            .child(text(face.label()).font(type_::HEADING).color(t.text))
-            .child(text(face.hint()).font(type_::LABEL).color(t.text_secondary))
-    };
-
-    styled
-}
-
-fn segmented<F>(paint: Paint, key: &str, width: f32, options: &[(&str, bool)], on_pick: F) -> El
-where
-    F: Fn(&mut Panel, usize) + 'static + Copy,
-{
-    let t = paint.t;
-    let mut container = row()
-        .key(key)
-        .w(width)
-        .h(32.0)
-        .radius(radius::MD)
-        .fill(t.control_off)
-        .p(2.0)
-        .gap(2.0);
-
-    for (index, &(label, is_on)) in options.iter().enumerate() {
-        let mut button = row()
-            .key(label)
-            .grow(1.0)
-            .h_full()
-            .center()
-            .radius(radius::SM)
-            .on_press(move |panel: &mut Panel| on_pick(panel, index));
-
-        if is_on {
-            button = button.fill(t.card).shadow(0.0, 2.0, t.edge).child(
-                text(label)
-                    .font(type_::LABEL)
-                    .color(t.text),
-            );
-        } else {
-            button = button.hover(t.hover).child(
-                text(label)
-                    .font(type_::LABEL)
-                    .color(t.text_secondary),
-            );
-        }
-        container = container.child(button);
+    let mut cells = row().key("segments");
+    for (index, (name, on)) in items.iter().copied().enumerate() {
+        cells = cells.child(
+            el()
+                .key(name)
+                .role("segment")
+                .label(name)
+                .checked(on)
+                .focusable(true)
+                .size(seg, h - 2.0 * pad)
+                .center()
+                .radius(radius::SM)
+                .hover(if on { Color::TRANSPARENT } else { t.hover })
+                .on_press(move |panel: &mut Panel| {
+                    pick(panel, index);
+                })
+                .child(
+                    text(name)
+                        .font(type_::LABEL)
+                        .color(if on { t.text } else { t.text_secondary })
+                        .a11y_hidden(),
+                ),
+        );
     }
-    container
-}
 
-fn toggle_row<F>(paint: Paint, key: &str, label: &str, on: bool, on_toggle: F) -> El
-where
-    F: Fn(&mut Panel) + 'static + Copy,
-{
-    let t = paint.t;
-    let w = 42.0;
-    let h = 24.0;
-    let knob = 18.0;
-    let margin = 3.0;
-
-    let switch = row()
-        .key("switch")
-        .size(w, h)
-        .radius(h / 2.0)
-        .fill(if on { paint.accent } else { t.control_off })
-        .p(margin)
-        .on_press(move |panel: &mut Panel| on_toggle(panel))
+    el()
+        .key(key)
+        .role("segmented")
+        .size(width, h)
+        .padding(pad)
+        .radius(radius::MD)
+        .fill(t.control_track)
+        .motion(motion::SNAPPY)
         .child(
             el()
-                .size(knob, knob)
-                .radius(knob / 2.0)
-                .fill(t.knob)
-                .shadow(0.0, 2.0, t.knob_shadow)
-                .ml(if on { w - knob - margin * 2.0 } else { 0.0 }),
-        );
-
-    setting_row(paint, key, label, switch)
+                .key("indicator")
+                .size(seg, h - 2.0 * pad)
+                .absolute(pad + selected as f32 * seg, pad)
+                .radius(radius::SM)
+                .fill(t.indicator)
+                .shadow(1.0, 3.0, t.shadow)
+                .shadow(0.0, 0.5, t.edge)
+                .lead(motion::LEAD, motion::DEFAULT)
+                .a11y_hidden(),
+        )
+        .child(cells)
 }
 
-fn slider_row<F, S>(
+fn slider_row(
     paint: Paint,
-    key: &str,
+    key: &'static str,
     label: &str,
     value: f32,
     min: f32,
     max: f32,
-    set: F,
-    show: S,
-) -> El
-where
-    F: Fn(&mut Panel, f32) + 'static + Copy,
-    S: Fn(f32) -> String + 'static + Copy,
-{
+    set: fn(&mut Panel, f32),
+    show: fn(f32) -> String,
+) -> El {
     let t = paint.t;
-    let w = 180.0;
-    let h = 28.0;
-    let bar = 4.0;
-    let knob = 18.0;
+    let (w, h, knob, bar) = (180.0, 22.0, 18.0, 4.0);
     let travel = w - knob;
-    let span = max - min;
+    let span = (max - min).max(f32::EPSILON);
     let norm = ((value - min) / span).clamp(0.0, 1.0);
-
-    let to_value = move |cursor_x: f32| {
-        let pos = (cursor_x - knob / 2.0) / travel;
-        (pos.clamp(0.0, 1.0) * span + min).clamp(min, max)
-    };
+    let to_value = move |x: f32| min + ((x - knob / 2.0) / travel).clamp(0.0, 1.0) * span;
 
     let track = row()
-        .key("slider-container")
+        .key("slider-control")
         .gap(space::S3)
         .center_y()
         .child(
             el()
                 .key("slider")
                 .role("slider")
-                .range(min, max)
+                .label(label)
+                .range_value(f64::from(norm), 0.0, 1.0)
                 .range_step(0.01)
                 .a11y_value(show(value))
                 .on_step(move |panel: &mut Panel, steps, _| {
@@ -464,6 +421,7 @@ where
                         drag.data = norm;
                         let grab = knob / 2.0 + norm * travel;
                         if (drag.x - grab).abs() > knob / 2.0 + 2.0 {
+                            // Pressed the track, not the knob: jump there.
                             set(panel, to_value(drag.x));
                             commit(panel);
                         }
@@ -537,7 +495,7 @@ pub fn poll(p: &mut Panel, _: f64, _: &mut rune::Tx) -> bool {
 }
 
 pub fn spec() -> AppSpec<Panel> {
-    AppSpec { poll: Some(poll), ..AppSpec::new("ClockScreen Studio", (PANEL_W, PANEL_H), init, view) }
+    AppSpec { poll: Some(poll), ..AppSpec::new("ClockScreen settings", (PANEL_W, PANEL_H), init, view) }
 }
 
 /// Created hidden at startup; `open()` shows it, and closing it only closes the panel.
@@ -583,6 +541,7 @@ mod tests {
         let min = OPACITY_MIN;
         let max = OPACITY_MAX;
         let span = max - min;
+        // The normalised position of each end, then back again.
         for value in [min, (min + max) / 2.0, max] {
             let norm = ((value - min) / span).clamp(0.0, 1.0);
             let back = min + norm * span;

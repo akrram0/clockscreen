@@ -1,5 +1,5 @@
-//! `%APPDATA%\clockscreen\settings.json`: where the clock sits, how big it is, which face
-//! it wears, and depth / companion widget configuration.
+//! `%APPDATA%\clockscreen\settings.json`: where the clock sits, how big it is, and which face
+//! it wears.
 //!
 //! Everything here is user-editable, so nothing in the file is trusted: every field is
 //! `#[serde(default)]`-guarded, unknown names fall back to their default instead of failing the
@@ -16,6 +16,8 @@ pub const OPACITY_MIN: f32 = 0.25;
 pub const OPACITY_MAX: f32 = 1.0;
 
 /// Serialises as a stable kebab-case id, and reads an unknown id as `Default::default()`.
+///
+/// A hand-edited typo should cost you one setting, not the whole file.
 macro_rules! named_enum {
     ($ty:ty { $($variant:ident => $id:literal),+ $(,)? }) => {
         impl $ty {
@@ -143,7 +145,7 @@ impl Tint {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Settings {
     /// Physical desktop coordinates. `None` means "centre it on the primary display".
     #[serde(default)]
@@ -160,24 +162,6 @@ pub struct Settings {
     pub opacity: f32,
     #[serde(default)]
     pub tint: Tint,
-
-    /// Depth Effect: whether the foreground subject layer occludes the clock.
-    #[serde(default = "yes")]
-    pub depth_enabled: bool,
-    /// Path to a transparent cutout PNG (e.g. fish/character foreground mask).
-    #[serde(default)]
-    pub cutout_path: Option<String>,
-    /// Optional custom wallpaper image path.
-    #[serde(default)]
-    pub wallpaper_path: Option<String>,
-
-    /// Companion Widgets
-    #[serde(default = "yes")]
-    pub show_date: bool,
-    #[serde(default = "yes")]
-    pub show_vinyl: bool,
-    #[serde(default = "yes")]
-    pub show_island: bool,
 }
 
 fn one() -> f32 {
@@ -198,12 +182,6 @@ impl Default for Settings {
             hour24: true,
             opacity: 1.0,
             tint: Tint::default(),
-            depth_enabled: true,
-            cutout_path: None,
-            wallpaper_path: None,
-            show_date: true,
-            show_vinyl: true,
-            show_island: true,
         }
     }
 }
@@ -243,12 +221,12 @@ pub fn load() -> Settings {
         .sanitized()
 }
 
-pub fn save(settings: &Settings) {
+pub fn save(settings: Settings) {
     let file = path();
     if let Some(dir) = file.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    if let Ok(text) = serde_json::to_string_pretty(settings) {
+    if let Ok(text) = serde_json::to_string_pretty(&settings) {
         let _ = std::fs::write(&file, text + "\n");
     }
 }
@@ -283,24 +261,20 @@ mod tests {
 
     #[test]
     fn missing_fields_fall_back() {
-        let s: Settings = serde_json::from_str("{}").unwrap();
+        let s = serde_json::from_str::<Settings>("{}").unwrap();
         assert_eq!(s.scale, 1.0);
         assert_eq!(s.x, None);
         assert_eq!(s.face, Face::Glass);
         assert!(s.hour24);
         assert_eq!(s.opacity, 1.0);
         assert_eq!(s.tint, Tint::Auto);
-        assert!(s.depth_enabled);
-        assert!(s.show_date);
-        assert!(s.show_vinyl);
-        assert!(s.show_island);
     }
 
     #[test]
     fn a_v1_settings_file_still_loads() {
         // Written by v1.0.0, before faces existed.
-        let s: Settings =
-            serde_json::from_str(r#"{"x":120,"y":340,"scale":1.4}"#).unwrap().sanitized();
+        let s =
+            serde_json::from_str::<Settings>(r#"{"x":120,"y":340,"scale":1.4}"#).unwrap().sanitized();
         assert_eq!(s.x, Some(120));
         assert_eq!(s.scale, 1.4);
         assert_eq!(s.face, Face::Glass);
@@ -309,8 +283,8 @@ mod tests {
 
     #[test]
     fn an_unknown_face_costs_one_setting_not_the_file() {
-        let s: Settings =
-            serde_json::from_str(r#"{"x":120,"y":340,"scale":1.4,"face":"neon"}"#).unwrap();
+        let s =
+            serde_json::from_str::<Settings>(r#"{"x":120,"y":340,"scale":1.4,"face":"neon"}"#).unwrap();
         assert_eq!(s.face, Face::Glass);
         assert_eq!(s.scale, 1.4, "the rest of the file must survive a typo");
         assert_eq!(s.x, Some(120));

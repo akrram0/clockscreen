@@ -5,7 +5,6 @@ on:
     branches: [ "main", "master" ]
     tags: [ "v*" ]
   pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 permissions:
@@ -40,12 +39,16 @@ jobs:
       - name: Build release binary
         id: build
         shell: pwsh
-        run: cargo build --release
+        run: |
+          cargo build --release --verbose 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run unit tests
         id: tests
         shell: pwsh
-        run: cargo test --release --bin clockscreen
+        run: |
+          cargo test --release --bin clockscreen --verbose 2>&1 | Tee-Object -FilePath test.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Stage artifact
         id: stage
@@ -85,4 +88,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" clockscreen.exe \
             --repo "$GITHUB_REPOSITORY" \
             --title "ClockScreen $GITHUB_REF_NAME" \
-            --notes "Native Windows x64 GPU desktop wallpaper depth clock, built with anomalyco/rune."
+            --notes "Native Windows x64 GPU desktop wallpaper clock, built with anomalyco/rune."
