@@ -1,105 +1,89 @@
-# clockscreen
+# ClockScreen
 
-A Windows desktop clock: `HH:MM` drawn straight onto the wallpaper. No card, no panel,
-no background, no border — just text. Built in Rust with [Rune](https://github.com/anomalyco/rune).
+A frameless, transparent, highly-customizable desktop clock widget for Windows, designed with Apple/macOS aesthetics and Reddit-tier desktop setups in mind.
 
-- `HH:MM` at ~220 pt, in one of six faces, with a real vertical glass ramp and a rim light
-- every digit gets the same advance width, so the time never shifts as the minutes change
-- one small date line below, wide letter-spacing, 60 % opacity, a hairline rule on each side
-- the colon breathes once a second (ease-in-out, never a hard cut)
-- new digits arrive with a short spring
-- transparent, frameless, no taskbar entry, pinned below all other windows
-- hold left mouse for 0.5 s to drag; otherwise clicks go to the desktop
-- `Ctrl` + wheel scales (0.5×–2.5×)
-- tray icon: *Settings…*, *Next face*, *Start with Windows*, *Reset position*, *Quit*
+It supports **8 switchable clock styles**, adaptive low-CPU ticking (< 0.1% idle), ghost mode (click-through), window opacity control, and "Show Desktop" (Win+D) protection.
 
-Position, size, face, tint, opacity and 12/24-hour format persist in
-`%APPDATA%\clockscreen\settings.json`. Settings written by 1.0.0 still load.
+---
 
-## Download
+## 8 Built-in Clock Styles
 
-[Releases](https://github.com/akrram0/clockscreen/releases/latest) carry a prebuilt
-`clockscreen.exe` (Windows x64, no installer, no runtime). It is unsigned, so SmartScreen warns
-on first run: *More info → Run anyway*.
+1. **Minimal Digital** (420×200) — Ultra-clean tabular typography, running seconds, weekday and date.
+2. **Analog Clean** (360×360) — Minimalist circular dial with smooth 60 FPS sweep second hand.
+3. **Flip Clock** (420×210) — Classic split-flap retro digits with realistic 3D fold animations.
+4. **Typographic Stack** (320×380) — Modern Swiss / iOS-style stacked numbers (hours over minutes) with date pill.
+5. **Glass Card** (400×260) — Translucent glassmorphic card with dynamic time-of-day greeting and full date.
+6. **Cyberpunk Neon** (440×210) — Sci-Fi terminal HUD clock with glowing cyan/amber monospace digits and real-time second progress bar.
+7. **Word Clock** (520×520) — 11×10 typographic matrix highlighting the time in written words.
+8. **Dot Matrix** (420×200) — Retro 5×7 LED canvas matrix display with glowing phosphors.
 
-## Run
+---
 
-```powershell
-.\scripts\fetch-rune.ps1   # once: Rune's patched crates must exist under .rune/
-cargo run --release
+## Requirements
+
+- Node.js 20 or newer
+- pnpm (developed against pnpm 11)
+
+---
+
+## Install & Run
+
+```bash
+pnpm install
+pnpm start
 ```
 
-The first build compiles Rune and wgpu from git, so it takes a while.
+---
 
-## Build
+## Build Installers
 
-```powershell
-.\scripts\fetch-rune.ps1
-cargo build --release
-New-Item -ItemType Directory -Force dist | Out-Null
-Copy-Item target\release\clockscreen.exe dist\clockscreen.exe
+```bash
+pnpm dist
 ```
 
-The exe lands at `dist\clockscreen.exe` — a single self-contained binary, no installer,
-no runtime dependencies.
+Output goes to `dist/`:
+- `ClockScreen-1.0.0-portable.exe` — Single-file portable build.
+- `ClockScreen-Setup-1.0.0.exe` — NSIS installer.
 
-CI (`.github/workflows/build.yml`) does the same on `windows-latest`, runs the unit tests,
-smoke-runs the binary, and uploads `clockscreen.exe` as a build artifact.
+The app icon is generated mathematically from code with zero dependencies:
+```bash
+pnpm icon
+```
 
-## Faces
+---
 
-| Face | What it is |
-|---|---|
-| Glass | Frosted: the vertical white→grey ramp plus a bright rim on the up-facing edges |
-| Hairline | Only the rim of each stroke survives, so the digits read as thin outlines |
-| Bold | Heavier and tighter than Glass, with a harder fill |
-| Stacked | Hours above minutes, for tall and narrow wallpaper areas |
-| Condensed | Narrower face pulled together into a block |
-| Mono | Monospaced, for a technical look |
+## Controls & Features
 
-Tint: *Auto* follows the system theme (dark theme → light glass, light theme → graphite glass),
-and *Light* / *Warm* / *Cool* pin it.
+- **Drag & Position:** Drag anywhere on the clock to move it. Automatically clamps to your primary or secondary display work area.
+- **Mouse Wheel Scaling:** Scroll over the clock to resize smoothly from **50% to 200%**.
+- **Context Menu:** Right-click the clock or click the System Tray icon:
+  - **Switch Style:** Switch instantly between any of the 8 styles with smooth crossfade.
+  - **Window Opacity:** Adjust transparency (100%, 90%, 75%, 60%, 40%) to match any wallpaper.
+  - **Always on Top:** Toggle between desktop-level widget or floating above active apps.
+  - **Click-Through (Ghost Mode):** When enabled, clicks pass through directly to desktop icons beneath. (Re-enable interaction via the Tray icon).
+  - **Lock Position:** Prevent accidental dragging.
+  - **12-Hour / 24-Hour:** Toggle AM/PM format.
+  - **Date Language:** Choose between System Default locale, English, or Arabic.
+  - **Reset Position:** Snaps the widget back to the bottom-right corner.
+  - **Start with Windows:** Toggle automatic launch at system login.
 
-## How the time is drawn
+---
 
-Rune paints text with one solid colour and has no rectangular clip, so a gradient inside the
-glyphs is impossible with `text()`. The time and the date are therefore rasterised in-process
-with [`fontdue`](https://github.com/mooman219/fontdue) into an RGBA buffer — vertical ramp, rim
-light, fixed-width digit cells — and handed to Rune as an image (`Pixels` + `El::pixels`).
+## Performance & Architecture
 
-The window is **measured, not guessed**: the layout is rasterised once before the window exists,
-and the measured size (plus padding) is passed to `WindowOptions::physical_size`. Rune clips
-overflow rather than growing the window, so a fixed size is what cut the clock off on the right.
+- **Smart Adaptive Scheduler:**
+  - Clocks that don't need sub-second motion (Digital, Flip, Typographic, Glass, Word, Dot) sleep between seconds and wake up exactly at `1000 - Date.now() % 1000`.
+  - Only the Analog sweep second hand uses 60 FPS `requestAnimationFrame`.
+  - Result: idle desktop CPU footprint is **< 0.1%**.
+- **Smooth Dragging:** Drag calculations run without triggering continuous disk writes. Position persists only when the drag concludes.
+- **Win+D Protection:** Windows "Show Desktop" does not cause the clock to disappear; the window restores itself as an omnipresent desktop element.
 
-## How the window works
+---
 
-Rune creates the windows; the rest is Win32, in `src/win.rs`:
+## Settings
 
-| Want | How |
-|---|---|
-| Below every other window | `SetWindowPos(hwnd, HWND_BOTTOM, …)` |
-| No taskbar button, no Alt-Tab | `WS_EX_TOOLWINDOW`, `WS_EX_APPWINDOW` cleared |
-| Clicks reach the desktop | `click_through`, i.e. `WS_EX_TRANSPARENT` |
-| Hold-to-drag, `Ctrl`+wheel | a `WH_MOUSE_LL` hook on its own thread, since a click-through window gets no mouse input |
-| Start with Windows | `HKCU\…\CurrentVersion\Run` via `reg.exe` |
-
-The settings window is an ordinary decorated Rune window, created hidden at startup and shown
-from the tray. It owns no shared state: every change is written to `settings.json`, and the
-clock re-reads that file on its next poll.
-
-## Limits, stated plainly
-
-- The build is unsigned, so SmartScreen warns on first run (*More info → Run anyway*).
-- CI verifies that it compiles, that the unit tests pass, and that the binary starts. It has no
-  GPU, so it cannot verify how the clock actually looks.
-- *Auto* tint follows the system theme, not the wallpaper under the clock: Rune exposes no
-  screen sampling.
-
-## Credits
-
-All three faces are SIL Open Font License, and all three have identical advance widths for
-`0`–`9` (verified, not assumed):
-
-- `assets/Oxanium-Bold.ttf` — Oxanium (`assets/OFL-Oxanium.txt`)
-- `assets/TitilliumWeb-Bold.ttf` — Titillium Web (`assets/OFL-TitilliumWeb.txt`)
-- `assets/JetBrainsMono-Bold.ttf` — JetBrains Mono (`assets/OFL-JetBrainsMono.txt`)
+Settings are stored as JSON and saved atomically:
+```
+%APPDATA%\clockscreen\settings.json
+```
+Includes: `style`, `scale`, `opacity`, `x`, `y`, `locked`, `alwaysOnTop`, `clickThrough`, `hour12`, `locale`, `startWithWindows`. Corrupt or missing files gracefully reset to safe defaults without crashing.

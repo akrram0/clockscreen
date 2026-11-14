@@ -1,0 +1,802 @@
+/* ClockScreen — Design System & Renderer Styles.
+   Adheres to .agent/rules/design.md. Sized in rem with --scale for responsive scaling. */
+
+:root {
+  --scale: 1;
+
+  /* Color Palette (Exact Hex & Precise Alphas) */
+  --surface-deep: #0a0c10;
+  --glass-tint: rgba(18, 21, 29, 0.78);
+  --glass-tint-high: rgba(26, 30, 42, 0.88);
+  --border-hair: rgba(255, 255, 255, 0.12);
+  --border-subdued: rgba(255, 255, 255, 0.06);
+
+  --ink: #f4f6fb;
+  --muted: #9ba3b8;
+  --faint: #434b5c;
+
+  --accent-electric: #38bdf8;
+  --accent-warm: #f59e0b;
+  --highlight-shimmer: rgba(255, 255, 255, 0.14);
+
+  /* Radius Tiers */
+  --radius-sm: 0.375rem; /* 6px */
+  --radius-md: 0.875rem; /* 14px */
+  --radius-lg: 1.5rem;   /* 24px */
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  font-size: calc(16px * var(--scale, 1));
+  background: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* ---------- Stages & Crossfade ---------- */
+.stage {
+  position: absolute;
+  inset: 0;
+  padding: 1rem;
+  opacity: 0;
+  will-change: opacity;
+}
+
+.stage[data-clock="analog"] { padding: 0.75rem; }
+.stage[data-clock="word"] { padding: 0.9rem; }
+.stage[data-clock="typographic"] { padding: 0.85rem; }
+.stage[data-clock="neon"] { padding: 0.85rem; }
+
+/* ---------- Shared Glass Card ---------- */
+.clock-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-hair);
+  background: rgba(10, 12, 16, 0.65);
+  overflow: hidden;
+  box-shadow:
+    0 1rem 2.25rem rgba(0, 0, 0, 0.55),
+    0 0.25rem 0.75rem rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.blob-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.blob {
+  position: absolute;
+  display: block;
+  border-radius: var(--radius-full);
+  filter: blur(2.5rem);
+  opacity: 0.38;
+  mix-blend-mode: screen;
+  animation: blob-drift 22s ease-in-out infinite alternate;
+}
+
+.blob-a {
+  width: 55%;
+  height: 65%;
+  left: -8%;
+  top: -18%;
+  background: radial-gradient(circle, #38bdf8 0%, rgba(56, 189, 248, 0) 70%);
+}
+
+.blob-b {
+  width: 62%;
+  height: 70%;
+  right: -14%;
+  bottom: -26%;
+  background: radial-gradient(circle, #818cf8 0%, rgba(129, 140, 248, 0) 70%);
+  animation-delay: -7s;
+  animation-duration: 26s;
+}
+
+.blob-c {
+  width: 42%;
+  height: 50%;
+  left: 32%;
+  top: 34%;
+  background: radial-gradient(circle, #2dd4bf 0%, rgba(45, 212, 191, 0) 70%);
+  opacity: 0.26;
+  animation-delay: -13s;
+  animation-duration: 30s;
+}
+
+@keyframes blob-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(8%, 6%, 0) scale(1.08); }
+  100% { transform: translate3d(-6%, -4%, 0) scale(0.96); }
+}
+
+.clock-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: inherit;
+  background: var(--glass-tint);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 var(--highlight-shimmer),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.clock-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 80% at 20% 0%, rgba(255, 255, 255, 0.12), transparent 55%),
+    radial-gradient(90% 70% at 100% 100%, rgba(56, 189, 248, 0.06), transparent 60%);
+}
+
+[hidden] { display: none !important; }
+
+/* ============================================================
+   1. Minimal Digital — 420x200
+   ============================================================ */
+.min-card { border-radius: var(--radius-lg); }
+
+.min-surface {
+  justify-content: center;
+  padding: 1.1rem 2rem 1.2rem;
+}
+
+.min-time {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  width: 100%;
+  line-height: 0.9;
+}
+
+.min-main {
+  font-size: 6.8rem;
+  font-weight: 200;
+  letter-spacing: -0.04em;
+  line-height: 0.85;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.min-ampm {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.min-sec {
+  margin-left: auto;
+  padding-left: 1rem;
+  font-size: 1.25rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.min-date {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.min-date.is-arabic {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ============================================================
+   2. Analog Clean — 360x360
+   ============================================================ */
+.ana-card {
+  border-radius: var(--radius-full);
+  border-color: var(--border-hair);
+}
+
+.ana-surface {
+  border-radius: var(--radius-full);
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.08), transparent 46%),
+    radial-gradient(circle at 70% 86%, rgba(56, 189, 248, 0.06), transparent 52%),
+    var(--glass-tint);
+}
+
+.ana-surface::after {
+  background: radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.1), transparent 52%);
+}
+
+.ana-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.ana-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 0.6;
+}
+
+.ana-tick {
+  stroke: rgba(255, 255, 255, 0.24);
+  stroke-width: 0.6;
+  stroke-linecap: round;
+}
+
+.ana-tick-major {
+  stroke: rgba(255, 255, 255, 0.65);
+  stroke-width: 1.1;
+}
+
+.ana-hand {
+  stroke: var(--ink);
+  stroke-linecap: round;
+}
+
+.ana-hour-line { stroke-width: 2.2; }
+.ana-minute-line { stroke-width: 1.8; }
+
+.ana-second-line {
+  stroke: var(--accent-warm);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 0.18rem rgba(245, 158, 11, 0.75));
+}
+
+.ana-cap { fill: var(--accent-warm); }
+.ana-cap-inner { fill: #0e1015; }
+
+/* ============================================================
+   3. Flip Clock — 420x210
+   ============================================================ */
+.flip-card { border-radius: var(--radius-lg); }
+
+.flip-surface { justify-content: center; }
+
+.flip-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  height: 100%;
+  padding: 0 1rem;
+}
+
+.flip-unit {
+  position: relative;
+  width: 7.5rem;
+  height: 8.2rem;
+  perspective: 42rem;
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 0.9rem 1.6rem rgba(0, 0, 0, 0.45),
+    0 0.15rem 0.35rem rgba(0, 0, 0, 0.35);
+}
+
+.flip-half {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.flip-top {
+  top: 0;
+  z-index: 1;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.85);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+}
+
+.flip-bottom {
+  bottom: 0;
+  z-index: 1;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  border-top: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.3));
+}
+
+.flip-half span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 8.2rem;
+  line-height: 8.2rem;
+  text-align: center;
+  font-size: 5.2rem;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.flip-top span,
+.flip-flap-top span { top: 0; }
+
+.flip-bottom span,
+.flip-flap-bottom span { top: -4.1rem; }
+
+.flip-flap-top,
+.flip-flap-bottom {
+  z-index: 3;
+}
+
+.flip-flap-top {
+  top: 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-bottom: 0;
+  transform-origin: bottom center;
+  transform: rotateX(-90deg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+}
+
+.flip-flap-bottom {
+  bottom: 0;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  border-top: 0;
+  transform-origin: top center;
+  transform: rotateX(90deg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.25));
+}
+
+.flip-flap-top.flipping {
+  animation: flip-top 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+}
+
+.flip-flap-bottom.flipping {
+  animation: flip-bottom 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+}
+
+@keyframes flip-top {
+  from { transform: rotateX(0deg); }
+  to   { transform: rotateX(-90deg); }
+}
+
+@keyframes flip-bottom {
+  from { transform: rotateX(90deg); }
+  to   { transform: rotateX(0deg); }
+}
+
+.flip-seam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  z-index: 5;
+  height: 2px;
+  margin-top: -1px;
+  background: rgba(0, 0, 0, 0.9);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12), 0 -1px 0 rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+
+.flip-colon {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0 0.1rem;
+}
+
+.flip-colon i {
+  display: block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: var(--radius-full);
+  background: rgba(244, 246, 251, 0.85);
+  box-shadow: 0 0 0.5rem rgba(56, 189, 248, 0.35);
+}
+
+.flip-ampm {
+  position: absolute;
+  top: 0.85rem;
+  right: 1.1rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+/* ============================================================
+   4. Typographic Stack — 320x380
+   ============================================================ */
+.typo-card { border-radius: var(--radius-lg); }
+
+.typo-blob-a {
+  width: 80%;
+  height: 50%;
+  top: -10%;
+  left: 10%;
+  background: radial-gradient(circle, #6366f1 0%, transparent 68%);
+}
+
+.typo-blob-b {
+  width: 70%;
+  height: 50%;
+  bottom: -15%;
+  right: 5%;
+  background: radial-gradient(circle, #38bdf8 0%, transparent 68%);
+}
+
+.typo-surface {
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.typo-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 0.82;
+  margin-top: -0.5rem;
+}
+
+.typo-hours,
+.typo-minutes {
+  font-size: 8.5rem;
+  font-weight: 200;
+  letter-spacing: -0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.typo-minutes {
+  color: var(--muted);
+  opacity: 0.9;
+}
+
+.typo-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subdued);
+}
+
+.typo-date {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+}
+
+.typo-date.is-arabic {
+  letter-spacing: 0;
+}
+
+.typo-ampm {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--accent-electric);
+}
+
+/* ============================================================
+   5. Cyberpunk Neon — 440x210
+   ============================================================ */
+.neon-card {
+  border-radius: var(--radius-md);
+  border-color: rgba(56, 189, 248, 0.25);
+  box-shadow:
+    0 1rem 2.5rem rgba(0, 0, 0, 0.7),
+    0 0 1.2rem rgba(56, 189, 248, 0.12);
+}
+
+.neon-grid-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.04) 1px, transparent 1px);
+  background-size: 1.25rem 1.25rem;
+  pointer-events: none;
+}
+
+.neon-surface {
+  justify-content: space-between;
+  padding: 1.1rem 1.5rem 1rem;
+  background: rgba(10, 14, 22, 0.88);
+}
+
+.neon-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.7rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: 0.15em;
+  color: var(--accent-electric);
+  opacity: 0.85;
+}
+
+.neon-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.neon-digits {
+  font-size: 5.5rem;
+  font-weight: 300;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: -0.03em;
+  color: #e0f2fe;
+  text-shadow:
+    0 0 0.8rem rgba(56, 189, 248, 0.5),
+    0 0 1.8rem rgba(56, 189, 248, 0.25);
+}
+
+.neon-ampm {
+  font-size: 0.85rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--accent-warm);
+}
+
+.neon-progress-track {
+  width: 100%;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.neon-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent-electric), var(--accent-warm));
+  box-shadow: 0 0 0.5rem rgba(56, 189, 248, 0.8);
+  transition: width 0.3s ease;
+}
+
+/* ============================================================
+   6. Word Clock — 520x520
+   ============================================================ */
+.word-card { border-radius: var(--radius-lg); }
+
+.word-surface {
+  padding: 1.5rem 1.3rem;
+}
+
+.word-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  grid-template-rows: repeat(10, 1fr);
+  gap: 0.16rem;
+  width: 100%;
+  height: 100%;
+}
+
+.word-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--faint);
+  transition: color 150ms ease, text-shadow 150ms ease;
+}
+
+.word-cell.active {
+  color: var(--ink);
+  text-shadow:
+    0 0 0.85rem rgba(56, 189, 248, 0.55),
+    0 0 0.2rem rgba(56, 189, 248, 0.45);
+}
+
+/* ============================================================
+   7. Dot Matrix — 420x200
+   ============================================================ */
+.dot-card { border-radius: var(--radius-lg); }
+
+.dot-surface { padding: 0.85rem; }
+
+.dot-panel {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    radial-gradient(120% 150% at 50% 0%, #191c23 0%, #0c0e12 62%, #08090c 100%);
+  box-shadow:
+    inset 0 0.12rem 0.7rem rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.dot-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.dot-ampm {
+  position: absolute;
+  right: 0.8rem;
+  bottom: 0.55rem;
+  z-index: 2;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  color: rgba(244, 246, 251, 0.45);
+}
+
+/* ============================================================
+   8. Glass Card — 400x260
+   ============================================================ */
+.glass-card { border-radius: var(--radius-lg); }
+
+.glass-surface {
+  justify-content: space-between;
+  padding: 1.35rem 1.6rem 1.3rem;
+  background: var(--glass-tint);
+}
+
+.glass-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02) 20%, transparent 46%);
+}
+
+.glass-top,
+.glass-time-row,
+.glass-date {
+  position: relative;
+  z-index: 1;
+}
+
+.glass-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.glass-weekday {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.glass-greeting {
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.glass-time-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin-top: -0.15rem;
+}
+
+.glass-time {
+  font-size: 4.8rem;
+  font-weight: 200;
+  letter-spacing: -0.03em;
+  line-height: 0.88;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.glass-ampm {
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.glass-date {
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  line-height: 1.25;
+}
+
+.glass-weekday.is-arabic,
+.glass-date.is-arabic {
+  letter-spacing: 0;
+}
+
+/* ---------- Reduced Motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .blob {
+    animation: none !important;
+  }
+
+  .flip-flap-top,
+  .flip-flap-bottom {
+    animation: none !important;
+  }
+
+  .word-cell {
+    transition: none !important;
+  }
+
+  .neon-progress-bar {
+    transition: none !important;
+  }
+}

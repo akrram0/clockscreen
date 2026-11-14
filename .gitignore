@@ -1,3 +1,11 @@
-/target
-/dist
-/.rune
+# Dependencies
+node_modules/
+
+# Production build outputs
+dist/
+
+# Logs and temporary files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

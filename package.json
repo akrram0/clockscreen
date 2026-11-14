@@ -1,0 +1,54 @@
+{
+  "name": "clockscreen",
+  "productName": "ClockScreen",
+  "version": "1.0.0",
+  "description": "A beautiful desktop clock widget with multiple switchable styles",
+  "main": "main.js",
+  "author": "Neweye",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "icon": "node scripts/make-icon.js",
+    "dist": "electron-builder --win"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^45.3.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.neweye.clockscreen",
+    "productName": "ClockScreen",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "styles.css",
+      "clocks/**/*",
+      "build/icon.png"
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "portable": {
+      "artifactName": "ClockScreen-${version}-portable.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "ClockScreen-Setup-${version}.${ext}"
+    }
+  }
+}

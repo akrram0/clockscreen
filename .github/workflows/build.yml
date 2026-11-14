@@ -1,135 +1,66 @@
-name: build
+name: Build ClockScreen
 
 on:
   push:
-    branches: [main]
-    tags: ['v*']
+    branches: [ "main", "master" ]
+    tags: [ "v*" ]
   pull_request:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 permissions:
   contents: write
 
-env:
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-
 jobs:
-  windows:
+  build-windows:
+    name: Build Windows App
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Fetch Rune sources (patched crates)
-        id: rune
-        shell: pwsh
-        run: ./scripts/fetch-rune.ps1
-
-      - name: Install Rust
-        id: toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
         with:
-          key: clockscreen
+          version: latest
+          run_install: false
 
-      - name: Build release
-        id: build
-        shell: pwsh
-        run: |
-          cargo build --release 2>&1 | Tee-Object -FilePath build.log
-          $code = $LASTEXITCODE
-          "clockscreen: cargo build exited $code" | Out-File -Append -Encoding utf8 build.log
-          if ($code -ne 0) { exit 1 }
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
 
-      - name: Unit tests
-        id: tests
-        shell: pwsh
-        run: |
-          cargo test --release --bin clockscreen 2>&1 | Tee-Object -FilePath test.log
-          $code = $LASTEXITCODE
-          "clockscreen: cargo test exited $code" | Out-File -Append -Encoding utf8 test.log
-          if ($code -ne 0) { exit 1 }
+      - name: Install dependencies
+        run: pnpm install
 
-      - name: Stage artifact
-        id: stage
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item target\release\clockscreen.exe dist\clockscreen.exe
-          Get-Item dist\clockscreen.exe | Select-Object FullName, Length
+      - name: Generate App Icon
+        run: pnpm icon
 
-      # The release binary is a GUI-subsystem exe, so PowerShell does not wait for `&` and never
-      # sets $LASTEXITCODE for it: wait explicitly and read ExitCode.
-      - name: Smoke run (no window)
-        id: smoke
-        shell: pwsh
-        run: |
-          $process = Start-Process -FilePath .\dist\clockscreen.exe -ArgumentList '--version' -PassThru -Wait
-          Write-Output "clockscreen.exe --version exited $($process.ExitCode)"
-          if ($process.ExitCode -ne 0) { throw "clockscreen.exe --version exited $($process.ExitCode)" }
+      - name: Build Windows Installers
+        run: pnpm dist
 
-      # The workflow logs need a token, but a commit on main does not: whatever failed, leave
-      # the evidence where it can be read. Written for every failing step, including the ones
-      # that run before build.log exists.
-      - name: Publish diagnostics
-        if: failure() || cancelled()
-        shell: pwsh
-        run: |
-          $status = @(
-            "run: ${{ github.run_id }} attempt ${{ github.run_attempt }}"
-            "sha: ${{ github.sha }}"
-            "job: ${{ job.status }}"
-            "fetch-rune: ${{ steps.rune.outcome }}"
-            "toolchain: ${{ steps.toolchain.outcome }}"
-            "build: ${{ steps.build.outcome }}"
-            "tests: ${{ steps.tests.outcome }}"
-            "stage: ${{ steps.stage.outcome }}"
-            "smoke: ${{ steps.smoke.outcome }}"
-          )
-          if (Test-Path build.log) {
-            $status += "build.log: $((Get-Item build.log).Length) bytes"
-          } else {
-            $status += "build.log: MISSING"
-          }
-          if (Test-Path test.log) {
-            $status += "test.log: $((Get-Item test.log).Length) bytes"
-          } else {
-            $status += "test.log: MISSING"
-          }
-          $status | Set-Content -Encoding utf8 ci-status.txt
-          $status | ForEach-Object { Write-Output $_ }
-
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          if (Test-Path build.log) { git add -f build.log }
-          if (Test-Path test.log) { git add -f test.log }
-          git add -f ci-status.txt
-          git commit -m "ci: diagnostics for ${{ github.sha }} [skip ci]"
-          git push origin HEAD:refs/heads/main
-
-      - name: Upload exe
+      - name: Upload Windows Binaries
         uses: actions/upload-artifact@v4
         with:
-          name: clockscreen-windows-x64
-          path: dist/clockscreen.exe
+          name: ClockScreen-Windows-Binaries
+          path: dist/*.exe
           if-no-files-found: error
 
-  # Tagging a release makes the exe downloadable without a GitHub login; artifacts need one.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: windows
+    needs: build-windows
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: clockscreen-windows-x64
-      - name: Publish release
+          name: ClockScreen-Windows-Binaries
+      - name: Publish Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" clockscreen.exe \
+          gh release create "$GITHUB_REF_NAME" *.exe \
             --repo "$GITHUB_REPOSITORY" \
-            --title "clockscreen $GITHUB_REF_NAME" \
-            --notes "Windows x64, single self-contained exe. Unsigned: SmartScreen will warn on first run (More info -> Run anyway)."
+            --title "ClockScreen $GITHUB_REF_NAME" \
+            --notes "ClockScreen Windows build. Portable .exe and NSIS setup installer."
