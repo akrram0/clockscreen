@@ -148,6 +148,9 @@ struct StudioFonts {
     caption: HFONT,
 }
 
+unsafe impl Send for StudioFonts {}
+unsafe impl Sync for StudioFonts {}
+
 static STUDIO_FONTS: OnceLock<StudioFonts> = OnceLock::new();
 
 fn get_studio_fonts() -> &'static StudioFonts {
