@@ -1,7 +1,7 @@
 //! Windows System Tray Integration & Quick Action Context Menu.
 
-use windows::core::w;
-use windows::Win32::Foundation::{HWND, POINT};
+use windows::core::{w, PCWSTR};
+use windows::Win32::Foundation::{HWND, POINT, RECT};
 use windows::Win32::UI::Shell::{
     Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW,
 };
@@ -62,7 +62,7 @@ pub unsafe fn show_tray_menu(hwnd: HWND) {
     let s = settings::load();
 
     let _ = AppendMenuW(menu, MF_STRING, ID_SETTINGS, w!("ClockScreen Studio (Settings)..."));
-    let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
+    let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
 
     let lock_flags = if s.click_through { MF_CHECKED } else { MF_UNCHECKED };
     let _ = AppendMenuW(menu, MF_STRING | lock_flags, ID_LOCK, w!("Lock Position (Click-Through)"));
@@ -71,12 +71,12 @@ pub unsafe fn show_tray_menu(hwnd: HWND) {
     let _ = AppendMenuW(menu, MF_STRING, ID_NEXT_TINT, w!("Next Tint Style"));
     let _ = AppendMenuW(menu, MF_STRING, ID_RESET, w!("Reset to Center"));
 
-    let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
+    let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
 
     let startup_flags = if start_with_windows() { MF_CHECKED } else { MF_UNCHECKED };
     let _ = AppendMenuW(menu, MF_STRING | startup_flags, ID_STARTUP, w!("Start with Windows"));
 
-    let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
+    let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
     let _ = AppendMenuW(menu, MF_STRING, ID_QUIT, w!("Quit ClockScreen"));
 
     let mut pt = POINT::default();
@@ -90,7 +90,7 @@ pub unsafe fn show_tray_menu(hwnd: HWND) {
         pt.y,
         0,
         hwnd,
-        None,
+        None::<*const RECT>,
     );
 
     let _ = DestroyMenu(menu);

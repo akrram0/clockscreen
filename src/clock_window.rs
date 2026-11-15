@@ -130,7 +130,7 @@ pub unsafe fn create_clock_overlay(settings: &Settings) -> windows::core::Result
         300,
         None,
         None,
-        instance,
+        Some(instance.into()),
         None,
     )?;
 
@@ -139,7 +139,7 @@ pub unsafe fn create_clock_overlay(settings: &Settings) -> windows::core::Result
     // Pin to desktop bottom:
     let _ = SetWindowPos(
         hwnd,
-        Some(HWND_BOTTOM),
+        HWND_BOTTOM,
         0,
         0,
         0,
@@ -164,7 +164,7 @@ pub unsafe fn update_click_through(hwnd: HWND, click_through: bool) {
     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style);
     let _ = SetWindowPos(
         hwnd,
-        None,
+        HWND::default(),
         0,
         0,
         0,
@@ -287,7 +287,12 @@ pub unsafe extern "system" fn clock_wnd_proc(
     match msg {
         WM_LBUTTONDOWN => {
             // Drag the clock smoothly when unlocked:
-            let _ = SendMessageW(hwnd, WM_NCLBUTTONDOWN, WPARAM(HTCAPTION as usize), lparam);
+            let _ = SendMessageW(
+                hwnd,
+                WM_NCLBUTTONDOWN,
+                Some(WPARAM(HTCAPTION as usize)),
+                Some(lparam),
+            );
             LRESULT(0)
         }
         WM_EXITSIZEMOVE => {
@@ -340,7 +345,7 @@ pub unsafe extern "system" fn clock_wnd_proc(
             let new_y = (screen_h - h) / 2;
             let _ = SetWindowPos(
                 hwnd,
-                Some(HWND_BOTTOM),
+                HWND_BOTTOM,
                 new_x,
                 new_y,
                 0,

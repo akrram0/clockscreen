@@ -53,7 +53,7 @@ fn main() {
         let mutex = CreateMutexW(None, true, mutex_name);
         if windows::Win32::Foundation::GetLastError() == ERROR_ALREADY_EXISTS {
             // Already running: bring Studio to foreground:
-            if let Ok(existing) = FindWindowW(w!("ClockScreenStudioClass"), None) {
+            if let Ok(existing) = FindWindowW(w!("ClockScreenStudioClass"), windows::core::PCWSTR::null()) {
                 let _ = SetForegroundWindow(existing);
             }
             return;

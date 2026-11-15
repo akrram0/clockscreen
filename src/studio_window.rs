@@ -5,7 +5,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use windows::core::w;
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{BOOL, COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
 use windows::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush, DeleteDC,
@@ -87,7 +87,7 @@ pub unsafe fn create_studio_window() -> windows::core::Result<HWND> {
         win_h,
         None,
         None,
-        instance,
+        Some(instance.into()),
         None,
     )?;
 
@@ -439,13 +439,13 @@ pub unsafe extern "system" fn studio_wnd_proc(
             if x >= 280 && x <= 516 && y >= act_y + 120 && y <= act_y + 158 {
                 let current = start_with_windows();
                 let _ = set_start_with_windows(!current);
-                InvalidateRect(Some(hwnd), None, false);
+                let _ = InvalidateRect(Some(hwnd), None, BOOL(0));
             }
 
             if changed {
                 settings::save(s);
                 request_clock_reload();
-                InvalidateRect(Some(hwnd), None, false);
+                let _ = InvalidateRect(Some(hwnd), None, BOOL(0));
             }
 
             LRESULT(0)
@@ -469,7 +469,7 @@ pub unsafe extern "system" fn studio_wnd_proc(
 
                 settings::save(s);
                 request_clock_reload();
-                InvalidateRect(Some(hwnd), None, false);
+                let _ = InvalidateRect(Some(hwnd), None, BOOL(0));
             }
             LRESULT(0)
         }
