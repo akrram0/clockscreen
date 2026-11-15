@@ -88,9 +88,9 @@ pub unsafe fn show_tray_menu(hwnd: HWND) {
         TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
         pt.x,
         pt.y,
-        0,
+        None,
         hwnd,
-        None::<*const RECT>,
+        None,
     );
 
     let _ = DestroyMenu(menu);
