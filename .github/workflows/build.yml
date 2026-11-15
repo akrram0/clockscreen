@@ -33,31 +33,13 @@ jobs:
 
       - name: Build release binary
         id: build
-        shell: pwsh
-        run: |
-          cargo build --release --verbose 2>&1 | Tee-Object -FilePath build.log
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "=== BUILD ERROR LOG ==="
-            Get-Content build.log | Select-Object -Last 100
-            "```" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
-            Get-Content build.log | Select-Object -Last 100 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            "```" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            exit $LASTEXITCODE
-          }
-
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-failure-log
-          path: build.log
+        shell: bash
+        run: cargo build --release --verbose
 
       - name: Run unit tests
         id: tests
-        shell: pwsh
-        run: |
-          cargo test --release --bin clockscreen --verbose 2>&1 | Tee-Object -FilePath test.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        shell: bash
+        run: cargo test --release --bin clockscreen --verbose
 
       - name: Stage artifact
         id: stage
