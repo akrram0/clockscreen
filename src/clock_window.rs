@@ -234,7 +234,7 @@ pub unsafe fn render_clock(hwnd: HWND, settings: &Settings) {
     let mut ppv_bits: *mut core::ffi::c_void = std::ptr::null_mut();
     let Ok(h_bitmap) = CreateDIBSection(
         Some(screen_dc),
-        Some(&bmi as *const BITMAPINFO),
+        &bmi as *const BITMAPINFO,
         DIB_RGB_COLORS,
         &mut ppv_bits,
         HANDLE::default(),
