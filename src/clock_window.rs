@@ -5,7 +5,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use windows::core::w;
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GetDC, ReleaseDC, SelectObject,
     AC_SRC_ALPHA, AC_SRC_OVER, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, BLENDFUNCTION, DIB_RGB_COLORS,
@@ -213,7 +213,7 @@ pub unsafe fn render_clock(hwnd: HWND, settings: &Settings) {
         return;
     };
 
-    let mut bmi = BITMAPINFO {
+    let bmi = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
             biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
             biWidth: width,
@@ -229,10 +229,10 @@ pub unsafe fn render_clock(hwnd: HWND, settings: &Settings) {
     let mut ppv_bits: *mut core::ffi::c_void = std::ptr::null_mut();
     let Ok(h_bitmap) = CreateDIBSection(
         Some(screen_dc),
-        &mut bmi,
+        &bmi,
         DIB_RGB_COLORS,
         &mut ppv_bits,
-        None,
+        HANDLE::default(),
         0,
     ) else {
         let _ = DeleteDC(mem_dc);

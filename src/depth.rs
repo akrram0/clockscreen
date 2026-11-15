@@ -19,7 +19,8 @@ impl DepthMask {
         let reader = BufReader::new(file);
         let decoder = png::Decoder::new(reader);
         let mut reader = decoder.read_info().ok()?;
-        let mut buf = vec![0u8; reader.output_buffer_size()];
+        let buf_len = reader.output_buffer_size()?;
+        let mut buf = vec![0u8; buf_len];
         let info = reader.next_frame(&mut buf).ok()?;
 
         let width = info.width;

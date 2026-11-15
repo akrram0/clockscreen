@@ -10,7 +10,8 @@ use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_D
 use windows::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush, DeleteDC,
     DeleteObject, DrawTextW, FillRect, FrameRect, GetDC, ReleaseDC, SelectObject, SetBkMode,
-    SetTextColor, FW_BOLD, FW_REGULAR, HDC, HGDIOBJ, SRCCOPY, TRANSPARENT,
+    SetTextColor, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, FW_BOLD, FW_REGULAR,
+    HDC, HFONT, HGDIOBJ, OUT_DEFAULT_PRECIS, SRCCOPY, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -90,7 +91,7 @@ pub unsafe fn create_studio_window() -> windows::core::Result<HWND> {
         None,
     )?;
 
-    let dark_mode = true as windows::Win32::Foundation::BOOL;
+    let dark_mode = windows::Win32::Foundation::BOOL(1);
     let _ = DwmSetWindowAttribute(
         hwnd,
         DWMWA_USE_IMMERSIVE_DARK_MODE,
@@ -116,6 +117,25 @@ fn draw_rounded_rect(hdc: HDC, rect: &RECT, bg: COLORREF, border: COLORREF) {
         let _ = DeleteObject(HGDIOBJ(bg_brush.0));
         let _ = DeleteObject(HGDIOBJ(border_brush.0));
     }
+}
+
+unsafe fn make_font(height: i32, bold: bool) -> HFONT {
+    CreateFontW(
+        -height,
+        0,
+        0,
+        0,
+        if bold { FW_BOLD.0 as i32 } else { FW_REGULAR.0 as i32 },
+        0,
+        0,
+        0,
+        DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY,
+        0,
+        w!("Segoe UI"),
+    )
 }
 
 unsafe fn draw_text(hdc: HDC, text: &str, rect: &mut RECT, format: DRAW_TEXT_FORMAT) {
@@ -149,10 +169,10 @@ pub unsafe extern "system" fn studio_wnd_proc(
 
             SetBkMode(mem_dc, TRANSPARENT);
 
-            let font_title = CreateFontW(22, 0, 0, 0, FW_BOLD.0 as i32, 0, 0, 0, 0, 0, 0, 0, 0, w!("Segoe UI"));
-            let font_subhead = CreateFontW(14, 0, 0, 0, FW_BOLD.0 as i32, 0, 0, 0, 0, 0, 0, 0, 0, w!("Segoe UI"));
-            let font_body = CreateFontW(13, 0, 0, 0, FW_REGULAR.0 as i32, 0, 0, 0, 0, 0, 0, 0, 0, w!("Segoe UI"));
-            let font_caption = CreateFontW(11, 0, 0, 0, FW_REGULAR.0 as i32, 0, 0, 0, 0, 0, 0, 0, 0, w!("Segoe UI"));
+            let font_title = make_font(22, true);
+            let font_subhead = make_font(14, true);
+            let font_body = make_font(13, false);
+            let font_caption = make_font(11, false);
 
             let s = settings::load();
 
