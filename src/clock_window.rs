@@ -37,6 +37,7 @@ pub const WM_CLOCK_RESET: u32 = WM_USER + 102;
 static CLOCK_HWND: AtomicIsize = AtomicIsize::new(0);
 static DEPTH_MASK: Mutex<Option<Arc<DepthMask>>> = Mutex::new(None);
 static SYSTEM_DARK: AtomicBool = AtomicBool::new(true);
+static CLICK_THROUGH: AtomicBool = AtomicBool::new(false);
 
 pub fn set_clock_hwnd(hwnd: HWND) {
     CLOCK_HWND.store(hwnd.0 as isize, Ordering::Relaxed);
@@ -119,6 +120,7 @@ pub unsafe fn create_clock_overlay(settings: &Settings) -> windows::core::Result
     let _ = RegisterClassW(&wc);
 
     let mut ex_style = WS_EX_LAYERED | WS_EX_TOOLWINDOW;
+    CLICK_THROUGH.store(settings.click_through, Ordering::Relaxed);
     if settings.click_through {
         ex_style |= WS_EX_TRANSPARENT;
     }
@@ -165,6 +167,7 @@ pub unsafe fn create_clock_overlay(settings: &Settings) -> windows::core::Result
 }
 
 pub unsafe fn update_click_through(hwnd: HWND, click_through: bool) {
+    CLICK_THROUGH.store(click_through, Ordering::Relaxed);
     let mut ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     if click_through {
         ex_style |= WS_EX_TRANSPARENT.0 as isize;
@@ -296,22 +299,15 @@ pub unsafe extern "system" fn clock_wnd_proc(
 ) -> LRESULT {
     match msg {
         WM_NCHITTEST => {
-            let current = settings::load();
-            if current.click_through {
+            if CLICK_THROUGH.load(Ordering::Relaxed) {
                 DefWindowProcW(hwnd, msg, wparam, lparam)
             } else {
                 LRESULT(HTCAPTION as isize)
             }
         }
         WM_LBUTTONDOWN => {
-            // Drag the clock smoothly when unlocked:
-            let _ = SendMessageW(
-                hwnd,
-                WM_NCLBUTTONDOWN,
-                Some(WPARAM(HTCAPTION as usize)),
-                Some(lparam),
-            );
-            LRESULT(0)
+            // DefWindowProc handles caption dragging natively when WM_NCHITTEST returns HTCAPTION
+            DefWindowProcW(hwnd, msg, wparam, lparam)
         }
         WM_LBUTTONDBLCLK | WM_NCLBUTTONDBLCLK => {
             show_studio_window();
@@ -347,6 +343,16 @@ pub unsafe extern "system" fn clock_wnd_proc(
                 current.y = Some(rect.top);
                 settings::save(current);
             }
+            // Once drag ends, re-pin to desktop bottom cleanly with NO DWM thrashing:
+            let _ = SetWindowPos(
+                hwnd,
+                Some(HWND_BOTTOM),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            );
             LRESULT(0)
         }
         WM_MOUSEWHEEL => {
@@ -368,8 +374,8 @@ pub unsafe extern "system" fn clock_wnd_proc(
                 pos.flags.0 |= 0x0001 | 0x0002; // SWP_NOSIZE | SWP_NOMOVE
                 pos.flags.0 &= !0x0080;         // Clear SWP_HIDEWINDOW
             }
-            pos.hwndInsertAfter = HWND_BOTTOM;
-            pos.flags.0 &= !0x0004; // Clear SWP_NOZORDER
+            // Do NOT modify hwndInsertAfter or SWP_NOZORDER during moves!
+            // DWM z-order thrashing causes severe desktop-wide lag and cursor stutter.
             LRESULT(0)
         }
         WM_CLOCK_RELOAD => {

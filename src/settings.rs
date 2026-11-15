@@ -1,6 +1,7 @@
 //! `%APPDATA%\clockscreen\settings.json`: Configuration persistence and Windows shell integration.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use serde::{Deserialize, Serialize};
 
@@ -215,6 +216,14 @@ pub fn load() -> Settings {
     get_cache().lock().map(|s| s.clone()).unwrap_or_default()
 }
 
+/// Instant in-memory cache update for 120Hz/144Hz slider dragging without disk I/O latency.
+pub fn update_memory(settings: Settings) {
+    let sanitized = settings.sanitized();
+    if let Ok(mut held) = get_cache().lock() {
+        *held = sanitized;
+    }
+}
+
 pub fn save(settings: Settings) {
     let sanitized = settings.sanitized();
     if let Ok(mut held) = get_cache().lock() {
@@ -232,14 +241,23 @@ pub fn save(settings: Settings) {
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 const RUN_VALUE: &str = "clockscreen";
 
+static START_WITH_WINDOWS: OnceLock<AtomicBool> = OnceLock::new();
+
+fn start_with_windows_cached() -> &'static AtomicBool {
+    START_WITH_WINDOWS.get_or_init(|| {
+        let val = std::process::Command::new("reg")
+            .args(["query", RUN_KEY, "/v", RUN_VALUE])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+        AtomicBool::new(val)
+    })
+}
+
 pub fn start_with_windows() -> bool {
-    std::process::Command::new("reg")
-        .args(["query", RUN_KEY, "/v", RUN_VALUE])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    start_with_windows_cached().load(Ordering::Relaxed)
 }
 
 pub fn set_start_with_windows(enabled: bool) -> bool {
@@ -253,12 +271,17 @@ pub fn set_start_with_windows(enabled: bool) -> bool {
     } else {
         command.args(["delete", RUN_KEY, "/v", RUN_VALUE, "/f"]);
     }
-    command
+    let success = command
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
         .map(|status| status.success())
-        .unwrap_or(false)
+        .unwrap_or(false);
+
+    if success {
+        start_with_windows_cached().store(enabled, Ordering::Relaxed);
+    }
+    success
 }
 
 #[cfg(test)]

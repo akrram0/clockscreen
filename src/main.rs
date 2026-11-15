@@ -26,8 +26,8 @@ use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, FindWindowW, GetMessageW, KillTimer, PostQuitMessage,
-    SetForegroundWindow, SetTimer, TranslateMessage, MSG, WM_COMMAND, WM_DESTROY, WM_LBUTTONDBLCLK,
-    WM_LBUTTONUP, WM_RBUTTONUP, WM_TIMER,
+    SetForegroundWindow, SetTimer, ShowWindow, TranslateMessage, MSG, SW_RESTORE, SW_SHOW,
+    WM_COMMAND, WM_DESTROY, WM_LBUTTONDBLCLK, WM_LBUTTONUP, WM_RBUTTONUP, WM_TIMER,
 };
 
 static LAST_MINUTE: AtomicU32 = AtomicU32::new(u32::MAX);
@@ -52,9 +52,12 @@ fn main() {
         let mutex = CreateMutexW(None, true, mutex_name);
         if windows::Win32::Foundation::GetLastError() == ERROR_ALREADY_EXISTS {
             // Already running: bring Studio to foreground:
-            studio_window::show_studio_window();
             if let Ok(existing) = FindWindowW(w!("ClockScreenStudioClass"), windows::core::PCWSTR::null()) {
-                let _ = SetForegroundWindow(existing);
+                if !existing.0.is_null() {
+                    let _ = ShowWindow(existing, SW_RESTORE);
+                    let _ = ShowWindow(existing, SW_SHOW);
+                    let _ = SetForegroundWindow(existing);
+                }
             }
             return;
         }

@@ -17,7 +17,7 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, GetClientRect, GetSystemMetrics,
-    RegisterClassW, SetForegroundWindow, ShowWindow, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW,
+    RegisterClassW, SetForegroundWindow, ShowWindow, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_RESTORE, SW_SHOW,
     WM_CLOSE, WM_DESTROY, WM_ERASEBKGND, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_PAINT,
     WNDCLASSW, WS_CAPTION, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU,
 };
@@ -49,6 +49,7 @@ pub fn show_studio_window() {
     if raw != 0 {
         let hwnd = HWND(raw as *mut core::ffi::c_void);
         unsafe {
+            let _ = ShowWindow(hwnd, SW_RESTORE);
             let _ = ShowWindow(hwnd, SW_SHOW);
             let _ = SetForegroundWindow(hwnd);
         }
@@ -140,6 +141,26 @@ unsafe fn make_font(height: i32, bold: bool) -> HFONT {
     )
 }
 
+struct StudioFonts {
+    title: HFONT,
+    subhead: HFONT,
+    body: HFONT,
+    caption: HFONT,
+}
+
+static STUDIO_FONTS: OnceLock<StudioFonts> = OnceLock::new();
+
+fn get_studio_fonts() -> &'static StudioFonts {
+    STUDIO_FONTS.get_or_init(|| unsafe {
+        StudioFonts {
+            title: make_font(22, true),
+            subhead: make_font(14, true),
+            body: make_font(13, false),
+            caption: make_font(11, false),
+        }
+    })
+}
+
 unsafe fn draw_text(hdc: HDC, text: &str, rect: &mut RECT, format: DRAW_TEXT_FORMAT) {
     let mut wide: Vec<u16> = text.encode_utf16().collect();
     let _ = DrawTextW(hdc, &mut wide, rect, format);
@@ -173,20 +194,16 @@ pub unsafe extern "system" fn studio_wnd_proc(
 
                 SetBkMode(mem_dc, TRANSPARENT);
 
-                let font_title = make_font(22, true);
-                let font_subhead = make_font(14, true);
-                let font_body = make_font(13, false);
-                let font_caption = make_font(11, false);
-
+                let fonts = get_studio_fonts();
                 let s = settings::load();
 
                 // 1. HEADER
-                SelectObject(mem_dc, HGDIOBJ(font_title.0));
+                SelectObject(mem_dc, HGDIOBJ(fonts.title.0));
                 SetTextColor(mem_dc, COLOR_TEXT_PRI);
                 let mut r_title = RECT { left: 24, top: 20, right: 340, bottom: 46 };
                 draw_text(mem_dc, "ClockScreen Studio", &mut r_title, DT_LEFT | DT_SINGLELINE);
 
-                SelectObject(mem_dc, HGDIOBJ(font_caption.0));
+                SelectObject(mem_dc, HGDIOBJ(fonts.caption.0));
                 SetTextColor(mem_dc, COLOR_TEXT_SEC);
                 let mut r_subtitle = RECT { left: 24, top: 48, right: 340, bottom: 66 };
                 draw_text(mem_dc, "Desktop Wallpaper Depth Clock Manager", &mut r_subtitle, DT_LEFT | DT_SINGLELINE);
@@ -199,7 +216,7 @@ pub unsafe extern "system" fn studio_wnd_proc(
                 draw_text(mem_dc, "● Active on Desktop", &mut r_badge_txt, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
                 // 2. FACE CARDS (2x3 grid)
-                SelectObject(mem_dc, HGDIOBJ(font_subhead.0));
+                SelectObject(mem_dc, HGDIOBJ(fonts.subhead.0));
                 SetTextColor(mem_dc, COLOR_TEXT_PRI);
                 let mut r_face_sec = RECT { left: 24, top: 82, right: 500, bottom: 104 };
                 draw_text(mem_dc, "Clock Face Style", &mut r_face_sec, DT_LEFT | DT_SINGLELINE);
@@ -218,12 +235,12 @@ pub unsafe extern "system" fn studio_wnd_proc(
 
                     draw_rounded_rect(mem_dc, &card_rect, bg, border);
 
-                    SelectObject(mem_dc, HGDIOBJ(font_body.0));
+                    SelectObject(mem_dc, HGDIOBJ(fonts.body.0));
                     SetTextColor(mem_dc, if is_active { COLOR_ACCENT } else { COLOR_TEXT_PRI });
                     let mut r_name = RECT { left: card_x + 12, top: card_y + 8, right: card_x + 228, bottom: card_y + 26 };
                     draw_text(mem_dc, faces[i as usize].label(), &mut r_name, DT_LEFT | DT_SINGLELINE);
 
-                    SelectObject(mem_dc, HGDIOBJ(font_caption.0));
+                    SelectObject(mem_dc, HGDIOBJ(fonts.caption.0));
                     SetTextColor(mem_dc, COLOR_TEXT_SEC);
                     let mut r_hint = RECT { left: card_x + 12, top: card_y + 28, right: card_x + 228, bottom: card_y + 46 };
                     draw_text(mem_dc, faces[i as usize].hint(), &mut r_hint, DT_LEFT | DT_SINGLELINE);
@@ -231,7 +248,7 @@ pub unsafe extern "system" fn studio_wnd_proc(
 
                 // 3. TINT SELECTOR
                 let tint_y = 310;
-                SelectObject(mem_dc, HGDIOBJ(font_subhead.0));
+                SelectObject(mem_dc, HGDIOBJ(fonts.subhead.0));
                 SetTextColor(mem_dc, COLOR_TEXT_PRI);
                 let mut r_tint_sec = RECT { left: 24, top: tint_y, right: 500, bottom: tint_y + 22 };
                 draw_text(mem_dc, "Appearance Tint", &mut r_tint_sec, DT_LEFT | DT_SINGLELINE);
@@ -246,7 +263,7 @@ pub unsafe extern "system" fn studio_wnd_proc(
                     let border = if is_active { COLOR_ACCENT } else { COLOR_BORDER };
                     draw_rounded_rect(mem_dc, &pill_rect, bg, border);
 
-                    SelectObject(mem_dc, HGDIOBJ(font_body.0));
+                    SelectObject(mem_dc, HGDIOBJ(fonts.body.0));
                     SetTextColor(mem_dc, if is_active { COLOR_ACCENT } else { COLOR_TEXT_PRI });
                     let mut r_txt = pill_rect;
                     draw_text(mem_dc, tints[i as usize].label(), &mut r_txt, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -254,7 +271,7 @@ pub unsafe extern "system" fn studio_wnd_proc(
 
                 // 4. SLIDERS: Scale and Opacity
                 let slider_y = 388;
-                SelectObject(mem_dc, HGDIOBJ(font_body.0));
+                SelectObject(mem_dc, HGDIOBJ(fonts.body.0));
                 SetTextColor(mem_dc, COLOR_TEXT_PRI);
                 let mut r_lbl_scale = RECT { left: 24, top: slider_y, right: 160, bottom: slider_y + 20 };
                 draw_text(mem_dc, "Clock Scale", &mut r_lbl_scale, DT_LEFT | DT_SINGLELINE);
@@ -288,7 +305,7 @@ pub unsafe extern "system" fn studio_wnd_proc(
 
                 // 5. TOGGLES & ACTIONS (Cards with checkboxes)
                 let act_y = 480;
-                SelectObject(mem_dc, HGDIOBJ(font_subhead.0));
+                SelectObject(mem_dc, HGDIOBJ(fonts.subhead.0));
                 SetTextColor(mem_dc, COLOR_TEXT_PRI);
                 let mut r_opt_sec = RECT { left: 24, top: act_y, right: 500, bottom: act_y + 22 };
                 draw_text(mem_dc, "Desktop Options", &mut r_opt_sec, DT_LEFT | DT_SINGLELINE);
@@ -296,7 +313,7 @@ pub unsafe extern "system" fn studio_wnd_proc(
                 // Toggle 1: Lock Position (Click-Through)
                 let r_btn_lock = RECT { left: 24, top: act_y + 28, right: 260, bottom: act_y + 66 };
                 draw_rounded_rect(mem_dc, &r_btn_lock, COLOR_CARD, if s.click_through { COLOR_ACCENT } else { COLOR_BORDER });
-                SelectObject(mem_dc, HGDIOBJ(font_body.0));
+                SelectObject(mem_dc, HGDIOBJ(fonts.body.0));
                 SetTextColor(mem_dc, if s.click_through { COLOR_ACCENT } else { COLOR_TEXT_PRI });
                 let lock_txt = if s.click_through { "🔒 Locked (Click-Through)" } else { "🔓 Unlocked (Draggable)" };
                 let mut r_lock_lbl = r_btn_lock;
@@ -343,7 +360,7 @@ pub unsafe extern "system" fn studio_wnd_proc(
                 draw_text(mem_dc, start_txt, &mut r_start_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
                 // FOOTER:
-                SelectObject(mem_dc, HGDIOBJ(font_caption.0));
+                SelectObject(mem_dc, HGDIOBJ(fonts.caption.0));
                 SetTextColor(mem_dc, COLOR_TEXT_DIM);
                 let mut r_footer = RECT { left: 24, top: 676, right: 516, bottom: 700 };
                 draw_text(mem_dc, "ClockScreen v1.0.0 • Pure Native Windows • 0% Idle CPU • Click-through", &mut r_footer, DT_CENTER | DT_SINGLELINE);
@@ -355,11 +372,6 @@ pub unsafe extern "system" fn studio_wnd_proc(
                 SelectObject(mem_dc, old_bmp);
                 let _ = DeleteObject(HGDIOBJ(h_bmp.0));
                 let _ = DeleteDC(mem_dc);
-
-                let _ = DeleteObject(HGDIOBJ(font_title.0));
-                let _ = DeleteObject(HGDIOBJ(font_subhead.0));
-                let _ = DeleteObject(HGDIOBJ(font_body.0));
-                let _ = DeleteObject(HGDIOBJ(font_caption.0));
             }
             let _ = EndPaint(hwnd, &ps);
 
@@ -472,14 +484,16 @@ pub unsafe extern "system" fn studio_wnd_proc(
                     s.opacity = OPACITY_MIN + pct * (OPACITY_MAX - OPACITY_MIN);
                 }
 
-                settings::save(s);
+                settings::update_memory(s);
                 request_clock_reload();
                 let _ = InvalidateRect(Some(hwnd), None, false);
             }
             LRESULT(0)
         }
         WM_LBUTTONUP => {
-            is_dragging_slider().store(false, Ordering::Relaxed);
+            if is_dragging_slider().swap(false, Ordering::Relaxed) {
+                settings::save(settings::load());
+            }
             LRESULT(0)
         }
         WM_CLOSE => {
