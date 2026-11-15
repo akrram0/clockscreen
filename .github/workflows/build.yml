@@ -94,7 +94,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          gh release upload "$GITHUB_REF_NAME" clockscreen.exe --repo "$GITHUB_REPOSITORY" --clobber || \
           gh release create "$GITHUB_REF_NAME" clockscreen.exe \
             --repo "$GITHUB_REPOSITORY" \
             --title "ClockScreen $GITHUB_REF_NAME" \
-            --notes "Native Windows x64 GPU desktop wallpaper clock, built with anomalyco/rune."
+            --notes "ClockScreen v1.0.0 — Native Windows Desktop Wallpaper Depth Clock & Studio App with 0% idle CPU and pure pre-multiplied alpha transparency."
