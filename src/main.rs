@@ -33,8 +33,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 static LAST_MINUTE: AtomicU32 = AtomicU32::new(u32::MAX);
 
 fn current_minute() -> u32 {
-    let mut now = SYSTEMTIME::default();
-    unsafe { GetLocalTime(&mut now) };
+    let now = unsafe { GetLocalTime() };
     (now.wHour as u32) * 60 + (now.wMinute as u32)
 }
 

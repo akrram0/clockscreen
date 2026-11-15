@@ -179,8 +179,7 @@ pub unsafe fn update_click_through(hwnd: HWND, click_through: bool) {
 }
 
 pub unsafe fn render_clock(hwnd: HWND, settings: &Settings) {
-    let mut now = SYSTEMTIME::default();
-    GetLocalTime(&mut now);
+    let now = GetLocalTime();
 
     let (time_str, date_str) = format_clock(&now, settings.hour24);
     let style = style_for_face(
