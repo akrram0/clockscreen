@@ -144,7 +144,7 @@ pub unsafe fn create_clock_overlay(settings: &Settings) -> windows::core::Result
     // Pin to desktop bottom:
     let _ = SetWindowPos(
         hwnd,
-        HWND_BOTTOM,
+        Some(HWND_BOTTOM),
         0,
         0,
         0,
@@ -169,7 +169,7 @@ pub unsafe fn update_click_through(hwnd: HWND, click_through: bool) {
     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style);
     let _ = SetWindowPos(
         hwnd,
-        HWND::default(),
+        None,
         0,
         0,
         0,
@@ -351,7 +351,7 @@ pub unsafe extern "system" fn clock_wnd_proc(
             let new_y = (screen_h - h) / 2;
             let _ = SetWindowPos(
                 hwnd,
-                HWND_BOTTOM,
+                Some(HWND_BOTTOM),
                 new_x,
                 new_y,
                 0,
