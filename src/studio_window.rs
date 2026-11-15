@@ -2,24 +2,24 @@
 //! Designed strictly to Apple/macOS Sonoma dark-glass aesthetic tokens (.agent/rules/design.md).
 //! Pure native Win32 with double-buffered rendering for 0% CPU and zero flicker.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::OnceLock;
-use windows::core::w;
-use windows::Win32::Foundation::{BOOL, COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::core::{w, BOOL};
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
 use windows::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush, DeleteDC,
-    DeleteObject, DrawTextW, FillRect, FrameRect, GetDC, ReleaseDC, SelectObject, SetBkMode,
-    SetTextColor, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, FW_BOLD, FW_REGULAR,
-    HDC, HFONT, HGDIOBJ, OUT_DEFAULT_PRECIS, SRCCOPY, TRANSPARENT,
+    DeleteObject, DrawTextW, FillRect, FrameRect, GetDC, InvalidateRect, ReleaseDC, SelectObject,
+    SetBkMode, SetTextColor, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET,
+    DRAW_TEXT_FORMAT, DT_CENTER, DT_LEFT, DT_RIGHT, DT_SINGLELINE, DT_VCENTER, FW_BOLD,
+    FW_REGULAR, HDC, HFONT, HGDIOBJ, OUT_DEFAULT_PRECIS, SRCCOPY, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, GetClientRect, GetSystemMetrics, InvalidateRect,
-    RegisterClassW, SetForegroundWindow, ShowWindow, DRAW_TEXT_FORMAT, DT_CENTER, DT_LEFT,
-    DT_RIGHT, DT_SINGLELINE, DT_VCENTER, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, WM_CLOSE,
-    WM_DESTROY, WM_ERASEBKGND, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_PAINT, WNDCLASSW,
-    WS_CAPTION, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU,
+    CreateWindowExW, DefWindowProcW, GetClientRect, GetSystemMetrics,
+    RegisterClassW, SetForegroundWindow, ShowWindow, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW,
+    WM_CLOSE, WM_DESTROY, WM_ERASEBKGND, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_PAINT,
+    WNDCLASSW, WS_CAPTION, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU,
 };
 
 use crate::clock_window::{request_clock_reload, request_clock_reset};
@@ -28,7 +28,7 @@ use crate::settings::{
     SCALE_MAX, SCALE_MIN,
 };
 
-static STUDIO_HWND: OnceLock<HWND> = OnceLock::new();
+static STUDIO_HWND: AtomicIsize = AtomicIsize::new(0);
 static DRAGGING_SLIDER: OnceLock<AtomicBool> = OnceLock::new();
 
 fn is_dragging_slider() -> &'static AtomicBool {
@@ -45,7 +45,9 @@ const COLOR_TEXT_SEC: COLORREF = COLORREF(0x9b | (0xa3 << 8) | (0xb8 << 16));// 
 const COLOR_TEXT_DIM: COLORREF = COLORREF(0x4a | (0x52 << 8) | (0x68 << 16));// #4a5268 Subdued
 
 pub fn show_studio_window() {
-    if let Some(hwnd) = STUDIO_HWND.get().copied() {
+    let raw = STUDIO_HWND.load(Ordering::Relaxed);
+    if raw != 0 {
+        let hwnd = HWND(raw as *mut core::ffi::c_void);
         unsafe {
             let _ = ShowWindow(hwnd, SW_SHOW);
             let _ = SetForegroundWindow(hwnd);
@@ -99,7 +101,7 @@ pub unsafe fn create_studio_window() -> windows::core::Result<HWND> {
         std::mem::size_of_val(&dark_mode) as u32,
     );
 
-    let _ = STUDIO_HWND.set(hwnd);
+    STUDIO_HWND.store(hwnd.0 as isize, Ordering::Relaxed);
     let _ = ShowWindow(hwnd, SW_SHOW);
     let _ = SetForegroundWindow(hwnd);
 

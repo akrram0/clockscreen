@@ -2,10 +2,10 @@
 //! Powered by Win32 UpdateLayeredWindow with pre-multiplied alpha:
 //! 0% CPU, 0% GPU, true per-pixel transparency, and zero white boxes.
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::{Arc, Mutex};
 use windows::core::w;
-use windows::Win32::Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, SYSTEMTIME, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GetDC, ReleaseDC, SelectObject,
     AC_SRC_ALPHA, AC_SRC_OVER, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, BLENDFUNCTION, DIB_RGB_COLORS,
@@ -31,16 +31,21 @@ use crate::settings::{self, Settings, SCALE_MAX, SCALE_MIN};
 pub const WM_CLOCK_RELOAD: u32 = WM_USER + 101;
 pub const WM_CLOCK_RESET: u32 = WM_USER + 102;
 
-static CLOCK_HWND: OnceLock<HWND> = OnceLock::new();
+static CLOCK_HWND: AtomicIsize = AtomicIsize::new(0);
 static DEPTH_MASK: Mutex<Option<Arc<DepthMask>>> = Mutex::new(None);
 static SYSTEM_DARK: AtomicBool = AtomicBool::new(true);
 
 pub fn set_clock_hwnd(hwnd: HWND) {
-    let _ = CLOCK_HWND.set(hwnd);
+    CLOCK_HWND.store(hwnd.0 as isize, Ordering::Relaxed);
 }
 
 pub fn get_clock_hwnd() -> Option<HWND> {
-    CLOCK_HWND.get().copied()
+    let raw = CLOCK_HWND.load(Ordering::Relaxed);
+    if raw == 0 {
+        None
+    } else {
+        Some(HWND(raw as *mut core::ffi::c_void))
+    }
 }
 
 pub fn request_clock_reload() {
@@ -74,7 +79,7 @@ const MONTHS: [&str; 12] = [
     "October", "November", "December",
 ];
 
-fn format_clock(now: &windows::Win32::System::SystemInformation::SYSTEMTIME, hour24: bool) -> (String, String) {
+fn format_clock(now: &SYSTEMTIME, hour24: bool) -> (String, String) {
     let time_str = if hour24 {
         format!("{:02}:{:02}", now.wHour, now.wMinute)
     } else {
@@ -174,7 +179,7 @@ pub unsafe fn update_click_through(hwnd: HWND, click_through: bool) {
 }
 
 pub unsafe fn render_clock(hwnd: HWND, settings: &Settings) {
-    let mut now = windows::Win32::System::SystemInformation::SYSTEMTIME::default();
+    let mut now = SYSTEMTIME::default();
     GetLocalTime(&mut now);
 
     let (time_str, date_str) = format_clock(&now, settings.hour24);

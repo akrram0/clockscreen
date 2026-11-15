@@ -20,20 +20,20 @@ mod tray;
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use windows::core::w;
-use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, MSG};
+use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, SYSTEMTIME};
 use windows::Win32::System::SystemInformation::GetLocalTime;
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, FindWindowW, GetMessageW, KillTimer, PostQuitMessage,
-    SetForegroundWindow, SetTimer, TranslateMessage, WM_COMMAND, WM_DESTROY, WM_LBUTTONDBLCLK,
+    SetForegroundWindow, SetTimer, TranslateMessage, MSG, WM_COMMAND, WM_DESTROY, WM_LBUTTONDBLCLK,
     WM_LBUTTONUP, WM_RBUTTONUP, WM_TIMER,
 };
 
 static LAST_MINUTE: AtomicU32 = AtomicU32::new(u32::MAX);
 
 fn current_minute() -> u32 {
-    let mut now = windows::Win32::System::SystemInformation::SYSTEMTIME::default();
+    let mut now = SYSTEMTIME::default();
     unsafe { GetLocalTime(&mut now) };
     (now.wHour as u32) * 60 + (now.wMinute as u32)
 }
