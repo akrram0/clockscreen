@@ -237,7 +237,7 @@ pub unsafe fn render_clock(hwnd: HWND, settings: &Settings) {
         &bmi as *const BITMAPINFO,
         DIB_RGB_COLORS,
         &mut ppv_bits,
-        HANDLE::default(),
+        None,
         0,
     ) else {
         let _ = DeleteDC(mem_dc);
