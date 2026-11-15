@@ -444,13 +444,13 @@ pub unsafe extern "system" fn studio_wnd_proc(
             if x >= 280 && x <= 516 && y >= act_y + 120 && y <= act_y + 158 {
                 let current = start_with_windows();
                 let _ = set_start_with_windows(!current);
-                let _ = InvalidateRect(Some(hwnd), None, BOOL(0));
+                let _ = InvalidateRect(Some(hwnd), None, false);
             }
 
             if changed {
                 settings::save(s);
                 request_clock_reload();
-                let _ = InvalidateRect(Some(hwnd), None, BOOL(0));
+                let _ = InvalidateRect(Some(hwnd), None, false);
             }
 
             LRESULT(0)
@@ -474,7 +474,7 @@ pub unsafe extern "system" fn studio_wnd_proc(
 
                 settings::save(s);
                 request_clock_reload();
-                let _ = InvalidateRect(Some(hwnd), None, BOOL(0));
+                let _ = InvalidateRect(Some(hwnd), None, false);
             }
             LRESULT(0)
         }
