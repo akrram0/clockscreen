@@ -8,7 +8,7 @@ use windows::Win32::UI::Shell::{
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, LoadIconW,
     PostQuitMessage, SetForegroundWindow, TrackPopupMenu, IDI_APPLICATION,
-    MF_CHECKED, MF_SEPARATOR, MF_STRING, MF_UNCHECKED, TPM_BOTTOMALIGN, TPM_RIGHTBUTTON,
+    MF_CHECKED, MF_SEPARATOR, MF_STRING, MF_UNCHECKED, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON,
     WM_USER,
 };
 
@@ -83,9 +83,9 @@ pub unsafe fn show_tray_menu(hwnd: HWND) {
     let _ = GetCursorPos(&mut pt);
 
     let _ = SetForegroundWindow(hwnd);
-    let _ = TrackPopupMenu(
+    let res = TrackPopupMenu(
         menu,
-        TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
+        TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
         pt.x,
         pt.y,
         None,
@@ -94,6 +94,10 @@ pub unsafe fn show_tray_menu(hwnd: HWND) {
     );
 
     let _ = DestroyMenu(menu);
+
+    if res.0 > 0 {
+        handle_tray_command(hwnd, res.0 as usize);
+    }
 }
 
 pub unsafe fn handle_tray_command(hwnd: HWND, command_id: usize) {

@@ -52,6 +52,7 @@ fn main() {
         let mutex = CreateMutexW(None, true, mutex_name);
         if windows::Win32::Foundation::GetLastError() == ERROR_ALREADY_EXISTS {
             // Already running: bring Studio to foreground:
+            studio_window::show_studio_window();
             if let Ok(existing) = FindWindowW(w!("ClockScreenStudioClass"), windows::core::PCWSTR::null()) {
                 let _ = SetForegroundWindow(existing);
             }
@@ -85,10 +86,8 @@ fn main() {
         // Create System Tray icon:
         tray::add_tray_icon(clock_hwnd);
 
-        // If user launched with `--settings`, open Studio immediately:
-        if std::env::args().any(|arg| arg == "--settings") {
-            studio_window::show_studio_window();
-        }
+        // Always show ClockScreen Studio on start so the user has immediate visual controls:
+        studio_window::show_studio_window();
 
         LAST_MINUTE.store(current_minute(), Ordering::Relaxed);
 

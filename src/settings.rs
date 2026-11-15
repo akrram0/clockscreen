@@ -121,7 +121,7 @@ pub struct Settings {
     pub hour24: bool,
     #[serde(default = "default_opacity")]
     pub opacity: f32,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub click_through: bool,
     #[serde(default = "default_true")]
     pub depth_enabled: bool,
@@ -155,7 +155,7 @@ impl Default for Settings {
             tint: Tint::Chrome,
             hour24: true,
             opacity: 0.95,
-            click_through: true,
+            click_through: false,
             depth_enabled: true,
             mask_path: None,
             show_date: true,

@@ -16,10 +16,11 @@ use windows::Win32::System::SystemInformation::GetLocalTime;
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CONTROL};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect,
-    PostMessageW, RegisterClassW, SendMessageW, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    GWL_EXSTYLE, HTCAPTION, HWND_BOTTOM, SM_CXSCREEN, SM_CYSCREEN, SWP_FRAMECHANGED,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SW_SHOW, ULW_ALPHA, WINDOWPOS, WM_DESTROY,
-    WM_DISPLAYCHANGE, WM_EXITSIZEMOVE, WM_LBUTTONDOWN, WM_MOUSEWHEEL, WM_NCLBUTTONDOWN, WM_USER,
+    LoadCursorW, PostMessageW, RegisterClassW, SendMessageW, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+    CS_DBLCLKS, GWL_EXSTYLE, HTCAPTION, HWND_BOTTOM, IDC_SIZEALL, SM_CXSCREEN, SM_CYSCREEN, SWP_FRAMECHANGED,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SW_SHOW, ULW_ALPHA, WINDOWPOS, WM_COMMAND, WM_DESTROY,
+    WM_DISPLAYCHANGE, WM_EXITSIZEMOVE, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEWHEEL,
+    WM_NCHITTEST, WM_NCLBUTTONDBLCLK, WM_NCLBUTTONDOWN, WM_NCRBUTTONUP, WM_RBUTTONUP, WM_USER,
     WM_WINDOWPOSCHANGING, WNDCLASSW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
@@ -27,6 +28,8 @@ use crate::depth::{apply_depth_occlusion, DepthMask};
 use crate::faces::style_for_face;
 use crate::glyphs::render_clock_layout;
 use crate::settings::{self, Settings, SCALE_MAX, SCALE_MIN};
+use crate::studio_window::show_studio_window;
+use crate::tray::{handle_tray_command, show_tray_menu, WM_TRAYICON};
 
 pub const WM_CLOCK_RELOAD: u32 = WM_USER + 101;
 pub const WM_CLOCK_RESET: u32 = WM_USER + 102;
@@ -106,8 +109,10 @@ pub unsafe fn create_clock_overlay(settings: &Settings) -> windows::core::Result
     let class_name = w!("ClockScreenOverlayClass");
 
     let wc = WNDCLASSW {
+        style: CS_DBLCLKS,
         lpfnWndProc: Some(clock_wnd_proc),
         hInstance: instance.into(),
+        hCursor: LoadCursorW(None, IDC_SIZEALL).unwrap_or_default(),
         lpszClassName: class_name,
         ..Default::default()
     };
@@ -290,6 +295,14 @@ pub unsafe extern "system" fn clock_wnd_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     match msg {
+        WM_NCHITTEST => {
+            let current = settings::load();
+            if current.click_through {
+                DefWindowProcW(hwnd, msg, wparam, lparam)
+            } else {
+                LRESULT(HTCAPTION as isize)
+            }
+        }
         WM_LBUTTONDOWN => {
             // Drag the clock smoothly when unlocked:
             let _ = SendMessageW(
@@ -298,6 +311,32 @@ pub unsafe extern "system" fn clock_wnd_proc(
                 Some(WPARAM(HTCAPTION as usize)),
                 Some(lparam),
             );
+            LRESULT(0)
+        }
+        WM_LBUTTONDBLCLK | WM_NCLBUTTONDBLCLK => {
+            show_studio_window();
+            LRESULT(0)
+        }
+        WM_RBUTTONUP | WM_NCRBUTTONUP => {
+            show_tray_menu(hwnd);
+            LRESULT(0)
+        }
+        WM_COMMAND => {
+            let cmd_id = (wparam.0 & 0xffff) as usize;
+            handle_tray_command(hwnd, cmd_id);
+            LRESULT(0)
+        }
+        WM_TRAYICON => {
+            let event = (lparam.0 & 0xffff) as u32;
+            match event {
+                WM_RBUTTONUP | WM_NCRBUTTONUP => {
+                    show_tray_menu(hwnd);
+                }
+                WM_LBUTTONUP | WM_LBUTTONDBLCLK => {
+                    show_studio_window();
+                }
+                _ => {}
+            }
             LRESULT(0)
         }
         WM_EXITSIZEMOVE => {
