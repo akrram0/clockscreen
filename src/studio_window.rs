@@ -8,11 +8,11 @@ use windows::core::{w, BOOL};
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
 use windows::Win32::Graphics::Gdi::{
-    BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush, DeleteDC,
-    DeleteObject, DrawTextW, FillRect, FrameRect, GetDC, InvalidateRect, ReleaseDC, SelectObject,
-    SetBkMode, SetTextColor, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET,
-    DRAW_TEXT_FORMAT, DT_CENTER, DT_LEFT, DT_RIGHT, DT_SINGLELINE, DT_VCENTER, FW_BOLD,
-    FW_REGULAR, HDC, HFONT, HGDIOBJ, OUT_DEFAULT_PRECIS, SRCCOPY, TRANSPARENT,
+    BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush,
+    DeleteDC, DeleteObject, DrawTextW, EndPaint, FillRect, FrameRect, InvalidateRect,
+    PAINTSTRUCT, SelectObject, SetBkMode, SetTextColor, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS,
+    DEFAULT_CHARSET, DRAW_TEXT_FORMAT, DT_CENTER, DT_LEFT, DT_RIGHT, DT_SINGLELINE, DT_VCENTER,
+    FW_BOLD, FW_REGULAR, HDC, HFONT, HGDIOBJ, OUT_DEFAULT_PRECIS, SRCCOPY, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -93,7 +93,7 @@ pub unsafe fn create_studio_window() -> windows::core::Result<HWND> {
         None,
     )?;
 
-    let dark_mode = windows::Win32::Foundation::BOOL(1);
+    let dark_mode = BOOL(1);
     let _ = DwmSetWindowAttribute(
         hwnd,
         DWMWA_USE_IMMERSIVE_DARK_MODE,
@@ -154,211 +154,214 @@ pub unsafe extern "system" fn studio_wnd_proc(
     match msg {
         WM_ERASEBKGND => LRESULT(1), // Prevent GDI flicker
         WM_PAINT => {
-            let mut client = RECT::default();
-            GetClientRect(hwnd, &mut client);
-            let w = client.right - client.left;
-            let h = client.bottom - client.top;
+            let mut ps = PAINTSTRUCT::default();
+            let screen_dc = BeginPaint(hwnd, &mut ps);
+            if !screen_dc.0.is_null() {
+                let mut client = RECT::default();
+                GetClientRect(hwnd, &mut client);
+                let w = client.right - client.left;
+                let h = client.bottom - client.top;
 
-            let screen_dc = GetDC(Some(hwnd));
-            let mem_dc = CreateCompatibleDC(Some(screen_dc)).unwrap();
-            let h_bmp = CreateCompatibleBitmap(screen_dc, w, h).unwrap();
-            let old_bmp = SelectObject(mem_dc, HGDIOBJ(h_bmp.0));
+                let mem_dc = CreateCompatibleDC(Some(screen_dc));
+                let h_bmp = CreateCompatibleBitmap(screen_dc, w, h);
+                let old_bmp = SelectObject(mem_dc, HGDIOBJ(h_bmp.0));
 
-            // Fill canvas:
-            let bg_brush = CreateSolidBrush(COLOR_BG);
-            FillRect(mem_dc, &client, bg_brush);
-            let _ = DeleteObject(HGDIOBJ(bg_brush.0));
+                // Fill canvas:
+                let bg_brush = CreateSolidBrush(COLOR_BG);
+                FillRect(mem_dc, &client, bg_brush);
+                let _ = DeleteObject(HGDIOBJ(bg_brush.0));
 
-            SetBkMode(mem_dc, TRANSPARENT);
+                SetBkMode(mem_dc, TRANSPARENT);
 
-            let font_title = make_font(22, true);
-            let font_subhead = make_font(14, true);
-            let font_body = make_font(13, false);
-            let font_caption = make_font(11, false);
+                let font_title = make_font(22, true);
+                let font_subhead = make_font(14, true);
+                let font_body = make_font(13, false);
+                let font_caption = make_font(11, false);
 
-            let s = settings::load();
+                let s = settings::load();
 
-            // 1. HEADER
-            SelectObject(mem_dc, HGDIOBJ(font_title.0));
-            SetTextColor(mem_dc, COLOR_TEXT_PRI);
-            let mut r_title = RECT { left: 24, top: 20, right: 340, bottom: 46 };
-            draw_text(mem_dc, "ClockScreen Studio", &mut r_title, DT_LEFT | DT_SINGLELINE);
-
-            SelectObject(mem_dc, HGDIOBJ(font_caption.0));
-            SetTextColor(mem_dc, COLOR_TEXT_SEC);
-            let mut r_subtitle = RECT { left: 24, top: 48, right: 340, bottom: 66 };
-            draw_text(mem_dc, "Desktop Wallpaper Depth Clock Manager", &mut r_subtitle, DT_LEFT | DT_SINGLELINE);
-
-            // Active Badge:
-            let r_badge = RECT { left: 390, top: 24, right: 516, bottom: 50 };
-            draw_rounded_rect(mem_dc, &r_badge, COLOR_CARD, COLOR_ACCENT);
-            SetTextColor(mem_dc, COLOR_ACCENT);
-            let mut r_badge_txt = r_badge;
-            draw_text(mem_dc, "● Active on Desktop", &mut r_badge_txt, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-            // 2. FACE CARDS (2x3 grid)
-            SelectObject(mem_dc, HGDIOBJ(font_subhead.0));
-            SetTextColor(mem_dc, COLOR_TEXT_PRI);
-            let mut r_face_sec = RECT { left: 24, top: 82, right: 500, bottom: 104 };
-            draw_text(mem_dc, "Clock Face Style", &mut r_face_sec, DT_LEFT | DT_SINGLELINE);
-
-            let faces = Face::ALL;
-            for i in 0..6 {
-                let col = i % 2;
-                let row = i / 2;
-                let card_x = 24 + col * 252;
-                let card_y = 110 + row * 62;
-                let card_rect = RECT { left: card_x, top: card_y, right: card_x + 240, bottom: card_y + 54 };
-
-                let is_active = s.face == faces[i as usize];
-                let bg = if is_active { COLORREF(0x1a | (0x2b << 8) | (0x44 << 16)) } else { COLOR_CARD };
-                let border = if is_active { COLOR_ACCENT } else { COLOR_BORDER };
-
-                draw_rounded_rect(mem_dc, &card_rect, bg, border);
-
-                SelectObject(mem_dc, HGDIOBJ(font_body.0));
-                SetTextColor(mem_dc, if is_active { COLOR_ACCENT } else { COLOR_TEXT_PRI });
-                let mut r_name = RECT { left: card_x + 12, top: card_y + 8, right: card_x + 228, bottom: card_y + 26 };
-                draw_text(mem_dc, faces[i as usize].label(), &mut r_name, DT_LEFT | DT_SINGLELINE);
+                // 1. HEADER
+                SelectObject(mem_dc, HGDIOBJ(font_title.0));
+                SetTextColor(mem_dc, COLOR_TEXT_PRI);
+                let mut r_title = RECT { left: 24, top: 20, right: 340, bottom: 46 };
+                draw_text(mem_dc, "ClockScreen Studio", &mut r_title, DT_LEFT | DT_SINGLELINE);
 
                 SelectObject(mem_dc, HGDIOBJ(font_caption.0));
                 SetTextColor(mem_dc, COLOR_TEXT_SEC);
-                let mut r_hint = RECT { left: card_x + 12, top: card_y + 28, right: card_x + 228, bottom: card_y + 46 };
-                draw_text(mem_dc, faces[i as usize].hint(), &mut r_hint, DT_LEFT | DT_SINGLELINE);
-            }
+                let mut r_subtitle = RECT { left: 24, top: 48, right: 340, bottom: 66 };
+                draw_text(mem_dc, "Desktop Wallpaper Depth Clock Manager", &mut r_subtitle, DT_LEFT | DT_SINGLELINE);
 
-            // 3. TINT SELECTOR
-            let tint_y = 310;
-            SelectObject(mem_dc, HGDIOBJ(font_subhead.0));
-            SetTextColor(mem_dc, COLOR_TEXT_PRI);
-            let mut r_tint_sec = RECT { left: 24, top: tint_y, right: 500, bottom: tint_y + 22 };
-            draw_text(mem_dc, "Appearance Tint", &mut r_tint_sec, DT_LEFT | DT_SINGLELINE);
+                // Active Badge:
+                let r_badge = RECT { left: 390, top: 24, right: 516, bottom: 50 };
+                draw_rounded_rect(mem_dc, &r_badge, COLOR_CARD, COLOR_ACCENT);
+                SetTextColor(mem_dc, COLOR_ACCENT);
+                let mut r_badge_txt = r_badge;
+                draw_text(mem_dc, "● Active on Desktop", &mut r_badge_txt, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-            let tints = Tint::ALL;
-            for i in 0..5 {
-                let pill_x = 24 + i * 98;
-                let pill_rect = RECT { left: pill_x, top: tint_y + 28, right: pill_x + 90, bottom: tint_y + 56 };
-                let is_active = s.tint == tints[i as usize];
+                // 2. FACE CARDS (2x3 grid)
+                SelectObject(mem_dc, HGDIOBJ(font_subhead.0));
+                SetTextColor(mem_dc, COLOR_TEXT_PRI);
+                let mut r_face_sec = RECT { left: 24, top: 82, right: 500, bottom: 104 };
+                draw_text(mem_dc, "Clock Face Style", &mut r_face_sec, DT_LEFT | DT_SINGLELINE);
 
-                let bg = if is_active { COLORREF(0x1a | (0x2b << 8) | (0x44 << 16)) } else { COLOR_CARD };
-                let border = if is_active { COLOR_ACCENT } else { COLOR_BORDER };
-                draw_rounded_rect(mem_dc, &pill_rect, bg, border);
+                let faces = Face::ALL;
+                for i in 0..6 {
+                    let col = i % 2;
+                    let row = i / 2;
+                    let card_x = 24 + col * 252;
+                    let card_y = 110 + row * 62;
+                    let card_rect = RECT { left: card_x, top: card_y, right: card_x + 240, bottom: card_y + 54 };
 
+                    let is_active = s.face == faces[i as usize];
+                    let bg = if is_active { COLORREF(0x1a | (0x2b << 8) | (0x44 << 16)) } else { COLOR_CARD };
+                    let border = if is_active { COLOR_ACCENT } else { COLOR_BORDER };
+
+                    draw_rounded_rect(mem_dc, &card_rect, bg, border);
+
+                    SelectObject(mem_dc, HGDIOBJ(font_body.0));
+                    SetTextColor(mem_dc, if is_active { COLOR_ACCENT } else { COLOR_TEXT_PRI });
+                    let mut r_name = RECT { left: card_x + 12, top: card_y + 8, right: card_x + 228, bottom: card_y + 26 };
+                    draw_text(mem_dc, faces[i as usize].label(), &mut r_name, DT_LEFT | DT_SINGLELINE);
+
+                    SelectObject(mem_dc, HGDIOBJ(font_caption.0));
+                    SetTextColor(mem_dc, COLOR_TEXT_SEC);
+                    let mut r_hint = RECT { left: card_x + 12, top: card_y + 28, right: card_x + 228, bottom: card_y + 46 };
+                    draw_text(mem_dc, faces[i as usize].hint(), &mut r_hint, DT_LEFT | DT_SINGLELINE);
+                }
+
+                // 3. TINT SELECTOR
+                let tint_y = 310;
+                SelectObject(mem_dc, HGDIOBJ(font_subhead.0));
+                SetTextColor(mem_dc, COLOR_TEXT_PRI);
+                let mut r_tint_sec = RECT { left: 24, top: tint_y, right: 500, bottom: tint_y + 22 };
+                draw_text(mem_dc, "Appearance Tint", &mut r_tint_sec, DT_LEFT | DT_SINGLELINE);
+
+                let tints = Tint::ALL;
+                for i in 0..5 {
+                    let pill_x = 24 + i * 98;
+                    let pill_rect = RECT { left: pill_x, top: tint_y + 28, right: pill_x + 90, bottom: tint_y + 56 };
+                    let is_active = s.tint == tints[i as usize];
+
+                    let bg = if is_active { COLORREF(0x1a | (0x2b << 8) | (0x44 << 16)) } else { COLOR_CARD };
+                    let border = if is_active { COLOR_ACCENT } else { COLOR_BORDER };
+                    draw_rounded_rect(mem_dc, &pill_rect, bg, border);
+
+                    SelectObject(mem_dc, HGDIOBJ(font_body.0));
+                    SetTextColor(mem_dc, if is_active { COLOR_ACCENT } else { COLOR_TEXT_PRI });
+                    let mut r_txt = pill_rect;
+                    draw_text(mem_dc, tints[i as usize].label(), &mut r_txt, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                }
+
+                // 4. SLIDERS: Scale and Opacity
+                let slider_y = 388;
                 SelectObject(mem_dc, HGDIOBJ(font_body.0));
-                SetTextColor(mem_dc, if is_active { COLOR_ACCENT } else { COLOR_TEXT_PRI });
-                let mut r_txt = pill_rect;
-                draw_text(mem_dc, tints[i as usize].label(), &mut r_txt, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                SetTextColor(mem_dc, COLOR_TEXT_PRI);
+                let mut r_lbl_scale = RECT { left: 24, top: slider_y, right: 160, bottom: slider_y + 20 };
+                draw_text(mem_dc, "Clock Scale", &mut r_lbl_scale, DT_LEFT | DT_SINGLELINE);
+
+                let scale_val_txt = format!("{:.2}×", s.scale);
+                let mut r_val_scale = RECT { left: 450, top: slider_y, right: 516, bottom: slider_y + 20 };
+                draw_text(mem_dc, &scale_val_txt, &mut r_val_scale, DT_RIGHT | DT_SINGLELINE);
+
+                let r_track_scale = RECT { left: 24, top: slider_y + 24, right: 516, bottom: slider_y + 34 };
+                draw_rounded_rect(mem_dc, &r_track_scale, COLOR_CARD, COLOR_BORDER);
+                let scale_pct = (s.scale - SCALE_MIN) / (SCALE_MAX - SCALE_MIN);
+                let thumb_x = 24 + (scale_pct * (516.0 - 24.0)) as i32;
+                let r_thumb_scale = RECT { left: thumb_x - 8, top: slider_y + 19, right: thumb_x + 8, bottom: slider_y + 39 };
+                draw_rounded_rect(mem_dc, &r_thumb_scale, COLOR_ACCENT, COLOR_TEXT_PRI);
+
+                // Opacity Slider:
+                let op_y = slider_y + 46;
+                let mut r_lbl_op = RECT { left: 24, top: op_y, right: 160, bottom: op_y + 20 };
+                draw_text(mem_dc, "Opacity", &mut r_lbl_op, DT_LEFT | DT_SINGLELINE);
+
+                let op_val_txt = format!("{}%", (s.opacity * 100.0).round() as i32);
+                let mut r_val_op = RECT { left: 450, top: op_y, right: 516, bottom: op_y + 20 };
+                draw_text(mem_dc, &op_val_txt, &mut r_val_op, DT_RIGHT | DT_SINGLELINE);
+
+                let r_track_op = RECT { left: 24, top: op_y + 24, right: 516, bottom: op_y + 34 };
+                draw_rounded_rect(mem_dc, &r_track_op, COLOR_CARD, COLOR_BORDER);
+                let op_pct = (s.opacity - OPACITY_MIN) / (OPACITY_MAX - OPACITY_MIN);
+                let thumb_op_x = 24 + (op_pct * (516.0 - 24.0)) as i32;
+                let r_thumb_op = RECT { left: thumb_op_x - 8, top: op_y + 19, right: thumb_op_x + 8, bottom: op_y + 39 };
+                draw_rounded_rect(mem_dc, &r_thumb_op, COLOR_ACCENT, COLOR_TEXT_PRI);
+
+                // 5. TOGGLES & ACTIONS (Cards with checkboxes)
+                let act_y = 480;
+                SelectObject(mem_dc, HGDIOBJ(font_subhead.0));
+                SetTextColor(mem_dc, COLOR_TEXT_PRI);
+                let mut r_opt_sec = RECT { left: 24, top: act_y, right: 500, bottom: act_y + 22 };
+                draw_text(mem_dc, "Desktop Options", &mut r_opt_sec, DT_LEFT | DT_SINGLELINE);
+
+                // Toggle 1: Lock Position (Click-Through)
+                let r_btn_lock = RECT { left: 24, top: act_y + 28, right: 260, bottom: act_y + 66 };
+                draw_rounded_rect(mem_dc, &r_btn_lock, COLOR_CARD, if s.click_through { COLOR_ACCENT } else { COLOR_BORDER });
+                SelectObject(mem_dc, HGDIOBJ(font_body.0));
+                SetTextColor(mem_dc, if s.click_through { COLOR_ACCENT } else { COLOR_TEXT_PRI });
+                let lock_txt = if s.click_through { "🔒 Locked (Click-Through)" } else { "🔓 Unlocked (Draggable)" };
+                let mut r_lock_lbl = r_btn_lock;
+                draw_text(mem_dc, lock_txt, &mut r_lock_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+                // Toggle 2: 24-Hour Format
+                let r_btn_fmt = RECT { left: 280, top: act_y + 28, right: 516, bottom: act_y + 66 };
+                draw_rounded_rect(mem_dc, &r_btn_fmt, COLOR_CARD, if s.hour24 { COLOR_ACCENT } else { COLOR_BORDER });
+                SetTextColor(mem_dc, if s.hour24 { COLOR_ACCENT } else { COLOR_TEXT_PRI });
+                let fmt_txt = if s.hour24 { "Clock: 24-Hour" } else { "Clock: 12-Hour" };
+                let mut r_fmt_lbl = r_btn_fmt;
+                draw_text(mem_dc, fmt_txt, &mut r_fmt_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+                // Toggle 3: 3D Depth Occlusion
+                let r_btn_depth = RECT { left: 24, top: act_y + 74, right: 260, bottom: act_y + 112 };
+                draw_rounded_rect(mem_dc, &r_btn_depth, COLOR_CARD, if s.depth_enabled { COLOR_ACCENT } else { COLOR_BORDER });
+                SetTextColor(mem_dc, if s.depth_enabled { COLOR_ACCENT } else { COLOR_TEXT_PRI });
+                let depth_txt = if s.depth_enabled { "✨ Depth Occlusion: ON" } else { "✨ Depth Occlusion: OFF" };
+                let mut r_depth_lbl = r_btn_depth;
+                draw_text(mem_dc, depth_txt, &mut r_depth_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+                // Toggle 4: Show Date Row
+                let r_btn_date = RECT { left: 280, top: act_y + 74, right: 516, bottom: act_y + 112 };
+                draw_rounded_rect(mem_dc, &r_btn_date, COLOR_CARD, if s.show_date { COLOR_ACCENT } else { COLOR_BORDER });
+                SetTextColor(mem_dc, if s.show_date { COLOR_ACCENT } else { COLOR_TEXT_PRI });
+                let date_txt = if s.show_date { "📅 Date Row: Shown" } else { "📅 Date Row: Hidden" };
+                let mut r_date_lbl = r_btn_date;
+                draw_text(mem_dc, date_txt, &mut r_date_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+                // Reset Position button:
+                let r_btn_reset = RECT { left: 24, top: act_y + 120, right: 260, bottom: act_y + 158 };
+                draw_rounded_rect(mem_dc, &r_btn_reset, COLOR_CARD, COLOR_BORDER);
+                SetTextColor(mem_dc, COLOR_TEXT_PRI);
+                let mut r_reset_lbl = r_btn_reset;
+                draw_text(mem_dc, "🔄 Reset to Center", &mut r_reset_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+                // Start with Windows toggle:
+                let is_start = start_with_windows();
+                let r_btn_start = RECT { left: 280, top: act_y + 120, right: 516, bottom: act_y + 158 };
+                draw_rounded_rect(mem_dc, &r_btn_start, COLOR_CARD, if is_start { COLOR_AMBER } else { COLOR_BORDER });
+                SetTextColor(mem_dc, if is_start { COLOR_AMBER } else { COLOR_TEXT_PRI });
+                let start_txt = if is_start { "🚀 Start with Windows: ON" } else { "🚀 Start with Windows: OFF" };
+                let mut r_start_lbl = r_btn_start;
+                draw_text(mem_dc, start_txt, &mut r_start_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+                // FOOTER:
+                SelectObject(mem_dc, HGDIOBJ(font_caption.0));
+                SetTextColor(mem_dc, COLOR_TEXT_DIM);
+                let mut r_footer = RECT { left: 24, top: 676, right: 516, bottom: 700 };
+                draw_text(mem_dc, "ClockScreen v1.0.0 • Pure Native Windows • 0% Idle CPU • Click-through", &mut r_footer, DT_CENTER | DT_SINGLELINE);
+
+                // Blit to screen DC:
+                let _ = BitBlt(screen_dc, 0, 0, w, h, Some(mem_dc), 0, 0, SRCCOPY);
+
+                // Cleanup:
+                SelectObject(mem_dc, old_bmp);
+                let _ = DeleteObject(HGDIOBJ(h_bmp.0));
+                let _ = DeleteDC(mem_dc);
+
+                let _ = DeleteObject(HGDIOBJ(font_title.0));
+                let _ = DeleteObject(HGDIOBJ(font_subhead.0));
+                let _ = DeleteObject(HGDIOBJ(font_body.0));
+                let _ = DeleteObject(HGDIOBJ(font_caption.0));
             }
-
-            // 4. SLIDERS: Scale and Opacity
-            let slider_y = 388;
-            SelectObject(mem_dc, HGDIOBJ(font_body.0));
-            SetTextColor(mem_dc, COLOR_TEXT_PRI);
-            let mut r_lbl_scale = RECT { left: 24, top: slider_y, right: 160, bottom: slider_y + 20 };
-            draw_text(mem_dc, "Clock Scale", &mut r_lbl_scale, DT_LEFT | DT_SINGLELINE);
-
-            let scale_val_txt = format!("{:.2}×", s.scale);
-            let mut r_val_scale = RECT { left: 450, top: slider_y, right: 516, bottom: slider_y + 20 };
-            draw_text(mem_dc, &scale_val_txt, &mut r_val_scale, DT_RIGHT | DT_SINGLELINE);
-
-            let r_track_scale = RECT { left: 24, top: slider_y + 24, right: 516, bottom: slider_y + 34 };
-            draw_rounded_rect(mem_dc, &r_track_scale, COLOR_CARD, COLOR_BORDER);
-            let scale_pct = (s.scale - SCALE_MIN) / (SCALE_MAX - SCALE_MIN);
-            let thumb_x = 24 + (scale_pct * (516.0 - 24.0)) as i32;
-            let r_thumb_scale = RECT { left: thumb_x - 8, top: slider_y + 19, right: thumb_x + 8, bottom: slider_y + 39 };
-            draw_rounded_rect(mem_dc, &r_thumb_scale, COLOR_ACCENT, COLOR_TEXT_PRI);
-
-            // Opacity Slider:
-            let op_y = slider_y + 46;
-            let mut r_lbl_op = RECT { left: 24, top: op_y, right: 160, bottom: op_y + 20 };
-            draw_text(mem_dc, "Opacity", &mut r_lbl_op, DT_LEFT | DT_SINGLELINE);
-
-            let op_val_txt = format!("{}%", (s.opacity * 100.0).round() as i32);
-            let mut r_val_op = RECT { left: 450, top: op_y, right: 516, bottom: op_y + 20 };
-            draw_text(mem_dc, &op_val_txt, &mut r_val_op, DT_RIGHT | DT_SINGLELINE);
-
-            let r_track_op = RECT { left: 24, top: op_y + 24, right: 516, bottom: op_y + 34 };
-            draw_rounded_rect(mem_dc, &r_track_op, COLOR_CARD, COLOR_BORDER);
-            let op_pct = (s.opacity - OPACITY_MIN) / (OPACITY_MAX - OPACITY_MIN);
-            let thumb_op_x = 24 + (op_pct * (516.0 - 24.0)) as i32;
-            let r_thumb_op = RECT { left: thumb_op_x - 8, top: op_y + 19, right: thumb_op_x + 8, bottom: op_y + 39 };
-            draw_rounded_rect(mem_dc, &r_thumb_op, COLOR_ACCENT, COLOR_TEXT_PRI);
-
-            // 5. TOGGLES & ACTIONS (Cards with checkboxes)
-            let act_y = 480;
-            SelectObject(mem_dc, HGDIOBJ(font_subhead.0));
-            SetTextColor(mem_dc, COLOR_TEXT_PRI);
-            let mut r_opt_sec = RECT { left: 24, top: act_y, right: 500, bottom: act_y + 22 };
-            draw_text(mem_dc, "Desktop Options", &mut r_opt_sec, DT_LEFT | DT_SINGLELINE);
-
-            // Toggle 1: Lock Position (Click-Through)
-            let r_btn_lock = RECT { left: 24, top: act_y + 28, right: 260, bottom: act_y + 66 };
-            draw_rounded_rect(mem_dc, &r_btn_lock, COLOR_CARD, if s.click_through { COLOR_ACCENT } else { COLOR_BORDER });
-            SelectObject(mem_dc, HGDIOBJ(font_body.0));
-            SetTextColor(mem_dc, if s.click_through { COLOR_ACCENT } else { COLOR_TEXT_PRI });
-            let lock_txt = if s.click_through { "🔒 Locked (Click-Through)" } else { "🔓 Unlocked (Draggable)" };
-            let mut r_lock_lbl = r_btn_lock;
-            draw_text(mem_dc, lock_txt, &mut r_lock_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-            // Toggle 2: 24-Hour Format
-            let r_btn_fmt = RECT { left: 280, top: act_y + 28, right: 516, bottom: act_y + 66 };
-            draw_rounded_rect(mem_dc, &r_btn_fmt, COLOR_CARD, if s.hour24 { COLOR_ACCENT } else { COLOR_BORDER });
-            SetTextColor(mem_dc, if s.hour24 { COLOR_ACCENT } else { COLOR_TEXT_PRI });
-            let fmt_txt = if s.hour24 { "Clock: 24-Hour" } else { "Clock: 12-Hour" };
-            let mut r_fmt_lbl = r_btn_fmt;
-            draw_text(mem_dc, fmt_txt, &mut r_fmt_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-            // Toggle 3: 3D Depth Occlusion
-            let r_btn_depth = RECT { left: 24, top: act_y + 74, right: 260, bottom: act_y + 112 };
-            draw_rounded_rect(mem_dc, &r_btn_depth, COLOR_CARD, if s.depth_enabled { COLOR_ACCENT } else { COLOR_BORDER });
-            SetTextColor(mem_dc, if s.depth_enabled { COLOR_ACCENT } else { COLOR_TEXT_PRI });
-            let depth_txt = if s.depth_enabled { "✨ Depth Occlusion: ON" } else { "✨ Depth Occlusion: OFF" };
-            let mut r_depth_lbl = r_btn_depth;
-            draw_text(mem_dc, depth_txt, &mut r_depth_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-            // Toggle 4: Show Date Row
-            let r_btn_date = RECT { left: 280, top: act_y + 74, right: 516, bottom: act_y + 112 };
-            draw_rounded_rect(mem_dc, &r_btn_date, COLOR_CARD, if s.show_date { COLOR_ACCENT } else { COLOR_BORDER });
-            SetTextColor(mem_dc, if s.show_date { COLOR_ACCENT } else { COLOR_TEXT_PRI });
-            let date_txt = if s.show_date { "📅 Date Row: Shown" } else { "📅 Date Row: Hidden" };
-            let mut r_date_lbl = r_btn_date;
-            draw_text(mem_dc, date_txt, &mut r_date_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-            // Reset Position button:
-            let r_btn_reset = RECT { left: 24, top: act_y + 120, right: 260, bottom: act_y + 158 };
-            draw_rounded_rect(mem_dc, &r_btn_reset, COLOR_CARD, COLOR_BORDER);
-            SetTextColor(mem_dc, COLOR_TEXT_PRI);
-            let mut r_reset_lbl = r_btn_reset;
-            draw_text(mem_dc, "🔄 Reset to Center", &mut r_reset_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-            // Start with Windows toggle:
-            let is_start = start_with_windows();
-            let r_btn_start = RECT { left: 280, top: act_y + 120, right: 516, bottom: act_y + 158 };
-            draw_rounded_rect(mem_dc, &r_btn_start, COLOR_CARD, if is_start { COLOR_AMBER } else { COLOR_BORDER });
-            SetTextColor(mem_dc, if is_start { COLOR_AMBER } else { COLOR_TEXT_PRI });
-            let start_txt = if is_start { "🚀 Start with Windows: ON" } else { "🚀 Start with Windows: OFF" };
-            let mut r_start_lbl = r_btn_start;
-            draw_text(mem_dc, start_txt, &mut r_start_lbl, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-            // FOOTER:
-            SelectObject(mem_dc, HGDIOBJ(font_caption.0));
-            SetTextColor(mem_dc, COLOR_TEXT_DIM);
-            let mut r_footer = RECT { left: 24, top: 676, right: 516, bottom: 700 };
-            draw_text(mem_dc, "ClockScreen v1.0.0 • Pure Native Windows • 0% Idle CPU • Click-through", &mut r_footer, DT_CENTER | DT_SINGLELINE);
-
-            // Blit to screen DC:
-            let _ = BitBlt(screen_dc, 0, 0, w, h, Some(mem_dc), 0, 0, SRCCOPY);
-
-            // Cleanup:
-            SelectObject(mem_dc, old_bmp);
-            let _ = DeleteObject(HGDIOBJ(h_bmp.0));
-            let _ = DeleteDC(mem_dc);
-            let _ = ReleaseDC(Some(hwnd), screen_dc);
-
-            let _ = DeleteObject(HGDIOBJ(font_title.0));
-            let _ = DeleteObject(HGDIOBJ(font_subhead.0));
-            let _ = DeleteObject(HGDIOBJ(font_body.0));
-            let _ = DeleteObject(HGDIOBJ(font_caption.0));
+            let _ = EndPaint(hwnd, &ps);
 
             LRESULT(0)
         }

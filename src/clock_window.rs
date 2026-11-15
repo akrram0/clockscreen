@@ -213,10 +213,11 @@ pub unsafe fn render_clock(hwnd: HWND, settings: &Settings) {
     let height = raster.height as i32;
 
     let screen_dc = GetDC(None);
-    let Ok(mem_dc) = CreateCompatibleDC(Some(screen_dc)) else {
+    let mem_dc = CreateCompatibleDC(Some(screen_dc));
+    if mem_dc.0.is_null() {
         let _ = ReleaseDC(None, screen_dc);
         return;
-    };
+    }
 
     let bmi = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
@@ -234,7 +235,7 @@ pub unsafe fn render_clock(hwnd: HWND, settings: &Settings) {
     let mut ppv_bits: *mut core::ffi::c_void = std::ptr::null_mut();
     let Ok(h_bitmap) = CreateDIBSection(
         Some(screen_dc),
-        &bmi,
+        Some(&bmi),
         DIB_RGB_COLORS,
         &mut ppv_bits,
         HANDLE::default(),

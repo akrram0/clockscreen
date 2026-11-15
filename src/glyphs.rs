@@ -18,7 +18,13 @@ pub fn get_font(index: usize) -> &'static Font {
             .map(|bytes| Font::from_bytes(*bytes, fontdue::FontSettings::default()).ok())
             .collect()
     });
-    parsed.get(index).and_then(|f| f.as_ref()).or_else(|| parsed.first()?.as_ref()).unwrap()
+    if let Some(Some(f)) = parsed.get(index) {
+        return f;
+    }
+    if let Some(Some(f)) = parsed.first() {
+        return f;
+    }
+    panic!("No font available");
 }
 
 pub struct RasterBuffer {
