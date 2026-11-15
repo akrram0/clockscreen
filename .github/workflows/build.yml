@@ -16,16 +16,11 @@ env:
 
 jobs:
   windows:
-    name: Build Native Windows App (Rune)
+    name: Build Native Windows App
     runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Fetch Rune sources (pinned vendor crates)
-        id: rune
-        shell: pwsh
-        run: ./scripts/fetch-rune.ps1
 
       - name: Setup Rust toolchain
         id: toolchain

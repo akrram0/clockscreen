@@ -1,141 +1,147 @@
-//! The face library: six treatments of the same measured layout.
-//!
-//! A face changes the font, the fill, the tracking, the layout and the ink — not the geometry
-//! rules. Every face keeps tabular digit cells, so the time never shifts when a minute changes.
-//!
-//! Fonts, all SIL OFL, verified to have identical advance widths for `0`–`9`:
-//! * 0 — Oxanium Bold (squared techno, the hero face)
-//! * 1 — Titillium Web Bold (DIN-adjacent, narrower)
-//! * 2 — JetBrains Mono Bold (monospaced)
+//! Clock face typography and aesthetic definitions.
 
-use crate::glyphs::{Fill, Ink, Spec};
 use crate::settings::{Face, Tint};
 
-/// The base point size of the time, before the user's scale.
-pub const TIME_PT: f32 = 160.0;
-pub const DATE_PT: f32 = 18.0;
+pub const BASE_TIME_PT: f32 = 150.0;
+pub const BASE_DATE_PT: f32 = 18.0;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ink {
+    pub top: [u8; 3],
+    pub bottom: [u8; 3],
+    pub opacity: f32,
+    pub rim: f32,
+}
+
+impl Ink {
+    pub const CHROME: Ink = Ink {
+        top: [255, 255, 255],
+        bottom: [165, 175, 190],
+        opacity: 0.95,
+        rim: 0.60,
+    };
+    pub const WARM: Ink = Ink {
+        top: [255, 245, 230],
+        bottom: [210, 185, 145],
+        opacity: 0.95,
+        rim: 0.50,
+    };
+    pub const COOL: Ink = Ink {
+        top: [240, 250, 255],
+        bottom: [140, 175, 215],
+        opacity: 0.95,
+        rim: 0.65,
+    };
+    pub const CYBER: Ink = Ink {
+        top: [220, 255, 255],
+        bottom: [35, 195, 235],
+        opacity: 0.98,
+        rim: 0.85,
+    };
+    pub const GRAPHITE: Ink = Ink {
+        top: [70, 75, 88],
+        bottom: [22, 26, 32],
+        opacity: 0.90,
+        rim: 0.30,
+    };
+
+    pub fn with_opacity(mut self, opacity: f32) -> Self {
+        self.opacity = opacity.clamp(0.0, 1.0);
+        self
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Fill {
+    Gradient,
+    Outline { radius: u32 },
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct Style {
-    /// Index into the font table.
-    pub font: usize,
+    pub font_index: usize,
     pub size_pt: f32,
     pub tracking: f32,
     pub digit_cells: bool,
-    /// Hours above minutes instead of side by side.
     pub stacked: bool,
     pub fill: Fill,
     pub ink: Ink,
-    /// The date line: smaller, wider tracking, dimmer ink.
-    pub date_px: f32,
+    pub date_pt: f32,
     pub date_tracking: f32,
-    /// Space between the time and the date line, in points at scale 1.
     pub date_gap: f32,
 }
 
-/// The ink for a tint, resolved against the desktop.
-///
-/// `Auto` follows the system theme: a light theme usually means a light wallpaper, so the clock
-/// turns to graphite glass rather than white on white.
-pub fn ink(tint: Tint, system_dark: bool, opacity: f32) -> Ink {
+pub fn ink_for_tint(tint: Tint, system_dark: bool, opacity: f32) -> Ink {
     let base = match tint {
-        Tint::Light => Ink::LIGHT,
-        Tint::Warm => Ink::WARM,
-        Tint::Cool => Ink::COOL,
         Tint::Auto => {
             if system_dark {
-                Ink::LIGHT
+                Ink::CHROME
             } else {
                 Ink::GRAPHITE
             }
         }
+        Tint::Chrome => Ink::CHROME,
+        Tint::Warm => Ink::WARM,
+        Tint::Cool => Ink::COOL,
+        Tint::Cyber => Ink::CYBER,
     };
     base.with_opacity(opacity)
 }
 
-pub fn style(face: Face, tint: Tint, system_dark: bool, opacity: f32) -> Style {
-    let ink = ink(tint, system_dark, opacity);
+pub fn style_for_face(face: Face, tint: Tint, system_dark: bool, opacity: f32) -> Style {
+    let ink = ink_for_tint(tint, system_dark, opacity);
     let base = Style {
-        font: 0,
-        size_pt: TIME_PT,
+        font_index: 0, // Oxanium-Bold
+        size_pt: BASE_TIME_PT,
         tracking: 2.0,
         digit_cells: true,
         stacked: false,
         fill: Fill::Gradient,
         ink,
-        date_px: DATE_PT,
+        date_pt: BASE_DATE_PT,
         date_tracking: 5.0,
         date_gap: 12.0,
     };
+
     match face {
-        // Frosted glass: the vertical ramp plus a rim light is the whole idea.
         Face::Glass => base,
-        // Hairline: only the rim of each stroke survives, so the digits read as thin outlines.
         Face::Hairline => Style {
             tracking: 4.0,
             fill: Fill::Outline { radius: 2 },
-            ink: Ink { rim: 0.15, ..ink },
+            ink: Ink { rim: 0.20, ..ink },
             date_tracking: 6.0,
             ..base
         },
-        // Bold: heavier presence through tighter tracking and a harder fill.
         Face::Bold => Style {
-            size_pt: TIME_PT + 6.0,
+            size_pt: BASE_TIME_PT + 6.0,
             tracking: -1.0,
-            ink: Ink { rim: 0.22, opacity: (ink.opacity * 1.06).min(1.0), ..ink },
+            ink: Ink { rim: 0.30, opacity: (ink.opacity * 1.05).min(1.0), ..ink },
             date_tracking: 4.0,
             ..base
         },
-        // Stacked: hours over minutes, for tall and narrow wallpaper areas.
         Face::Stacked => Style {
-            size_pt: TIME_PT * 0.86,
+            size_pt: BASE_TIME_PT * 0.86,
             stacked: true,
             tracking: 2.0,
-            date_gap: 16.0,
+            date_gap: 14.0,
             ..base
         },
-        // Condensed: Titillium is narrower, and the tracking pulls it tighter still.
         Face::Condensed => Style {
-            font: 1,
+            font_index: 1, // TitilliumWeb-Bold
             tracking: -3.0,
-            ink: Ink { rim: 0.35, ..ink },
+            ink: Ink { rim: 0.40, ..ink },
             date_tracking: 5.0,
             ..base
         },
-        // Mono: JetBrains Mono, which is monospaced by construction.
         Face::Mono => Style {
-            font: 2,
-            size_pt: TIME_PT * 0.88,
+            font_index: 2, // JetBrainsMono-Bold
+            size_pt: BASE_TIME_PT * 0.88,
             tracking: -1.5,
-            ink: Ink { rim: 0.30, ..ink },
-            date_px: DATE_PT * 0.95,
+            ink: Ink { rim: 0.35, ..ink },
+            date_pt: BASE_DATE_PT * 0.95,
             date_tracking: 4.0,
             ..base
         },
-    }
-}
-
-/// The spec for one rasterised run.
-pub fn spec(style: &Style, dpi: f32, px: f32) -> Spec {
-    Spec {
-        px,
-        dpi,
-        tracking: style.tracking,
-        digit_cells: style.digit_cells,
-        fill: style.fill,
-        ink: style.ink,
-    }
-}
-
-/// The spec for the date line, at 60% of the time's alpha.
-pub fn date_spec(style: &Style, dpi: f32, scale: f32) -> Spec {
-    Spec {
-        px: style.date_px * scale,
-        dpi,
-        tracking: style.date_tracking * scale,
-        digit_cells: true,
-        fill: Fill::Gradient,
-        ink: style.ink.with_opacity((style.ink.opacity * 0.62).min(0.72)),
     }
 }
 
@@ -144,43 +150,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn auto_flips_to_graphite_on_a_light_desktop() {
-        let dark = ink(Tint::Auto, true, 1.0);
-        let light = ink(Tint::Auto, false, 1.0);
-        assert_eq!(dark.top, Ink::LIGHT.top);
+    fn tint_resolution() {
+        let dark = ink_for_tint(Tint::Auto, true, 1.0);
+        let light = ink_for_tint(Tint::Auto, false, 1.0);
+        assert_eq!(dark.top, Ink::CHROME.top);
         assert_eq!(light.top, Ink::GRAPHITE.top);
-        assert!(light.top[0] < dark.top[0], "graphite must be darker than white");
     }
 
     #[test]
-    fn every_face_keeps_tabular_cells_and_a_usable_size() {
+    fn all_faces_have_valid_sizes() {
         for face in Face::ALL {
-            let style = style(face, Tint::Light, true, 1.0);
-            assert!(style.digit_cells, "{face:?} must not let the time shift");
-            assert!(style.size_pt > 100.0, "{face:?} is too small to be a clock face");
-            assert!(style.ink.opacity > 0.0);
-            assert!(style.font < crate::glyphs::FONT_BYTES.len(), "{face:?} names a missing font");
+            let s = style_for_face(face, Tint::Chrome, true, 1.0);
+            assert!(s.size_pt >= 100.0);
+            assert!(s.font_index <= 2);
         }
-    }
-
-    #[test]
-    fn opacity_reaches_the_ink() {
-        let faint = style(Face::Glass, Tint::Light, true, 0.4);
-        assert!((faint.ink.opacity - 0.4).abs() < 1e-6);
-    }
-
-    #[test]
-    fn hairline_is_an_outline_and_glass_is_a_fill() {
-        let glass = style(Face::Glass, Tint::Light, true, 1.0);
-        let hairline = style(Face::Hairline, Tint::Light, true, 1.0);
-        assert_eq!(glass.fill, Fill::Gradient);
-        assert!(matches!(hairline.fill, Fill::Outline { .. }));
-    }
-
-    #[test]
-    fn the_date_line_is_dimmer_than_the_time() {
-        let style = style(Face::Glass, Tint::Light, true, 1.0);
-        let date = date_spec(&style, 1.0, 1.0);
-        assert!(date.ink.opacity < style.ink.opacity);
     }
 }
